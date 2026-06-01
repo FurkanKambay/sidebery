@@ -7,6 +7,7 @@ import { Tab } from 'src/types'
 import * as Windows from 'src/services/windows.fg'
 import * as Notifications from 'src/services/notifications.fg'
 import { translate } from 'src/dict'
+import { TabRank } from 'src/enums'
 
 export const enum By {
   Title = 1,
@@ -169,13 +170,13 @@ function getSiblings(id: ID): ID[] | undefined {
   const panel = Sidebar.panelsById[tab.panelId]
 
   // Global pinned tabs
-  if (tab.pinned && Settings.state.pinnedTabsPosition !== 'panel') {
+  if (tab.rank === TabRank.Pinned) {
     return Tabs.pinned.map(t => t.id)
   }
 
-  // In panel pinned tabs
-  else if (tab.pinned && isTabsPanel(panel)) {
-    return panel.pinnedTabs.map(t => t.id)
+  // In panel-anchored tabs
+  else if (tab.rank === TabRank.Anchored && isTabsPanel(panel)) {
+    return panel.anchoredTabs.map(t => t.id)
   }
 
   // Normal tabs
@@ -282,7 +283,7 @@ async function sortTabsInChunks(sortingGroups: ID[][], sortFn: (a: ID, b: ID) =>
   // Update internal state
   Tabs.updateTabsTree()
   Sidebar.recalcTabsPanels()
-  if (tabProbe && !tabProbe.pinned) {
+  if (tabProbe && tabProbe.rank === TabRank.Regular) {
     Sidebar.recalcVisibleTabs(tabProbe.panelId)
   }
 }

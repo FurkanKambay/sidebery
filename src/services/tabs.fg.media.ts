@@ -48,11 +48,8 @@ export function muteAudibleTabsOfPanel(id: ID): void {
   const panel = Sidebar.panelsById[id]
   if (!Utils.isTabsPanel(panel)) return
 
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const tab of Tabs.list) {
-      if (!tab.pinned) break
-      if (tab.audible && tab.panelId === panel.id) browser.tabs.update(tab.id, { muted: true })
-    }
+  for (const tab of panel.anchoredTabs) {
+    if (tab.audible) browser.tabs.update(tab.id, { muted: true })
   }
 
   for (const tab of panel.tabs) {
@@ -64,14 +61,11 @@ export function unmuteAudibleTabsOfPanel(id: ID): void {
   const panel = Sidebar.panelsById[id]
   if (!Utils.isTabsPanel(panel)) return
 
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const tab of Tabs.list) {
-      if (!tab.pinned) break
-      if (tab.mutedInfo?.muted && tab.panelId === panel.id) {
-        browser.tabs.update(tab.id, { muted: false }).catch(err => {
-          Logs.err('Tabs.unmuteAudibleTabsOfPanel: Cannot unmute tab:', err)
-        })
-      }
+  for (const tab of panel.anchoredTabs) {
+    if (tab.mutedInfo?.muted) {
+      browser.tabs.update(tab.id, { muted: false }).catch(err => {
+        Logs.err('Tabs.unmuteAudibleTabsOfPanel: Cannot unmute tab:', err)
+      })
     }
   }
 
@@ -191,25 +185,22 @@ export async function pauseTabsMediaOfPanel(panelId: ID): Promise<void> {
     allFrames: true,
   }
 
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const tab of Tabs.list) {
-      if (!tab.pinned) break
-      if (tab.url.startsWith('ab')) continue
-      if ((tab.audible || tab.mutedInfo?.muted) && tab.panelId === panel.id) {
-        tab.reactive.mediaPaused = tab.mediaPaused = true
-        Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
-        browser.tabs
-          .executeScript(tab.id, injectionConfig)
-          .then(results => {
-            if (results.every(result => result === false)) {
-              tab.reactive.mediaPaused = tab.mediaPaused = false
-              Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
-            }
-          })
-          .catch(err => {
-            Logs.err('Tabs.pauseTabsMediaOfPanel: Cannot executeScript', err)
-          })
-      }
+  for (const tab of panel.anchoredTabs) {
+    if (tab.url.startsWith('ab')) continue
+    if (tab.audible || tab.mutedInfo?.muted) {
+      tab.reactive.mediaPaused = tab.mediaPaused = true
+      Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
+      browser.tabs
+        .executeScript(tab.id, injectionConfig)
+        .then(results => {
+          if (results.every(result => result === false)) {
+            tab.reactive.mediaPaused = tab.mediaPaused = false
+            Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
+          }
+        })
+        .catch(err => {
+          Logs.err('Tabs.pauseTabsMediaOfPanel: Cannot executeScript', err)
+        })
     }
   }
 
@@ -250,16 +241,13 @@ export async function playTabsMediaOfPanel(panelId: ID): Promise<void> {
     allFrames: true,
   }
 
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const tab of Tabs.list) {
-      if (!tab.pinned) break
-      if (tab.mediaPaused && tab.panelId === panel.id) {
-        tab.reactive.mediaPaused = tab.mediaPaused = false
-        Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
-        browser.tabs.executeScript(tab.id, injectionConfig).catch(err => {
-          Logs.err('Tabs.playTabsMediaOfPanel: Cannot exec script (pinned):', err)
-        })
-      }
+  for (const tab of panel.anchoredTabs) {
+    if (tab.mediaPaused) {
+      tab.reactive.mediaPaused = tab.mediaPaused = false
+      Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId, tab)
+      browser.tabs.executeScript(tab.id, injectionConfig).catch(err => {
+        Logs.err('Tabs.playTabsMediaOfPanel: Cannot exec script (pinned):', err)
+      })
     }
   }
 

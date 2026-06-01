@@ -10,6 +10,7 @@ export interface Tab extends NativeTab {
   autoUnloadFoldedTimeout?: number
   invisible: boolean
   parentId: ID
+  rank: E.TabRank
   panelId: ID
   prevPanelId: ID
   lvl: number
@@ -58,7 +59,7 @@ export interface ReactiveTabProps {
   mediaPaused: boolean
   containerColor: string | null
   discarded: boolean
-  pinned: boolean
+  rank: E.TabRank
   status: E.TabStatus
   isParent: boolean
   folded: boolean
@@ -83,6 +84,7 @@ export interface BgTab extends NativeTab {
   lvl?: number
   parentId?: ID
   panelId?: ID
+  rank?: E.TabRank
   folded?: boolean
   customTitle?: string
   customColor?: string
@@ -103,7 +105,7 @@ export interface InlineTabData {
 export interface TabCache {
   id: ID
   url: string
-  pin?: boolean
+  rank?: E.TabRank
   parentId?: ID /* only if tab has parent tab */
   panelId?: ID
   folded?: boolean
@@ -119,6 +121,7 @@ export interface TabCache {
 export interface TabSessionData {
   id: ID
   panelId: ID
+  rank: E.TabRank
   parentId: ID
   folded: boolean
   customTitle?: string
@@ -239,7 +242,7 @@ export interface ItemInfo {
   index?: number
   title?: string
   active?: boolean
-  pinned?: boolean
+  rank?: E.TabRank
   folded?: boolean
   parentId?: ID
   panelId?: ID

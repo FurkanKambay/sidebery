@@ -76,7 +76,7 @@ export const TABS_PANEL_STATE: T.TabsPanel = {
   ...TABS_PANEL_CONFIG,
 
   tabs: [],
-  pinnedTabs: [],
+  anchoredTabs: [],
   filteredTabs: undefined,
   updatedTabs: [],
   selNewTab: false,
@@ -111,7 +111,7 @@ export const TABS_PANEL_STATE: T.TabsPanel = {
     ready: true,
 
     visibleTabIds: [],
-    pinnedTabIds: [],
+    anchoredTabIds: [],
     updated: false,
     selNewTab: false,
     scrollRetainerHeight: 0,

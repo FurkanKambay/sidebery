@@ -1,5 +1,5 @@
 import * as T from 'src/types'
-import { PanelType } from 'src/enums'
+import { PanelType, TabRank } from 'src/enums'
 import { DEFAULT_CONTAINER_ID, MOVEID, NEWID, NOID } from 'src/defaults'
 import * as Sidebar from 'src/services/sidebar.fg'
 import * as Tabs from 'src/services/tabs.fg'
@@ -100,37 +100,38 @@ export async function move(
     dst.index = panel.nextTabIndex
   }
 
-  // Gather tabs by type (pinned/normal), get initial info
+  // Gather tabs by type (pinned/anchored/normal), get initial info
   const dstTab = Tabs.list[dst.index] as T.Tab | undefined
   const dstParent = Tabs.byId[dst.parentId]
   const srcParents: T.Tab[] = []
   const pinnedTabs: T.Tab[] = []
+  const anchoredTabs: T.Tab[] = []
   const normalTabs: T.Tab[] = []
-  let toPin: T.Tab[] | undefined
-  let toUnpin: T.Tab[] | undefined
-  let tabs: T.Tab[] = []
-  let isPinnedActive = false
+  let allTabs: T.Tab[] = []
+  let toPinNatively: T.Tab[] | undefined
+  let toUnpinNatively: T.Tab[] | undefined
+  let isAnchoredActive = false
+
   for (const info of tabsInfo) {
     const tab = Tabs.byId[info.id]
     if (!tab) continue
     // Logs.info('Tabs.move: tabId', tab.id)
-    if (tab.pinned) pinnedTabs.push(tab)
+    if (tab.rank === TabRank.Pinned) pinnedTabs.push(tab)
+    else if (tab.rank === TabRank.Anchored) anchoredTabs.push(tab)
     else normalTabs.push(tab)
-    tabs.push(tab)
+    allTabs.push(tab)
   }
 
-  if (dstTab?.pinned && !dst.pinned) return
-  if (!tabs.length) return
+  if (dstTab?.pinned && dst.rank !== TabRank.Pinned) return
+  if (!allTabs.length) return
 
-  // Switch panelId of pinned tabs and exclude them from general list
-  if (
-    pinnedTabs.length &&
-    dst.pinned === undefined &&
-    Settings.state.pinnedTabsPosition === 'panel'
-  ) {
-    for (const tab of pinnedTabs) {
-      if (!isPinnedActive && tab.active) isPinnedActive = true
+  // TODO FURKAN do these
 
+  // Switch panelId of anchored tabs and exclude them from general list
+  if (anchoredTabs.length && !dst.rank) {
+    console.log('set panel for anchored', { pinnedTabs, anchoredTabs, tabs: allTabs })
+    for (const tab of anchoredTabs) {
+      if (!isAnchoredActive && tab.active) isAnchoredActive = true
       if (dst.panelId !== undefined) {
         if (tab.audible || tab.mutedInfo?.muted || tab.mediaPaused) {
           Sidebar.updateMediaStateOfPanelDebounced(100, tab.panelId)
@@ -142,34 +143,49 @@ export async function move(
       Tabs.saveTabData(tab.id)
     }
 
-    tabs = normalTabs
+    allTabs = [...pinnedTabs, ...normalTabs]
   }
 
-  // Unpin
-  else if (pinnedTabs.length && !dst.pinned) {
-    for (const tab of pinnedTabs) {
-      tab.reactive.pinned = tab.pinned = false
-    }
-    toUnpin = pinnedTabs
+  // Pinned -> Anchored -- Normal
+  else if (pinnedTabs.length && dst.rank === TabRank.Anchored) {
+    console.log('Pinned -> Anchored -- Normal', { pinnedTabs, anchoredTabs, normalTabs })
+
+    for (const tab of pinnedTabs) Tabs.setRank(tab, TabRank.Anchored)
+    toUnpinNatively = pinnedTabs
   }
 
-  // Pin
-  else if (normalTabs.length && dst.pinned) {
-    for (const tab of normalTabs) {
-      tab.reactive.pinned = tab.pinned = true
-    }
-    toPin = normalTabs
+  // Pinned -- Anchored <- Normal
+  else if (normalTabs.length && dst.rank === TabRank.Anchored) {
+    console.log('Pinned -- Anchored <- Normal', { pinnedTabs, anchoredTabs, normalTabs })
+
+    for (const tab of normalTabs) Tabs.setRank(tab, TabRank.Anchored)
   }
 
-  // All tabs are pinned and was handled
-  if (!tabs.length) {
+  // Pinned <- Anchored -- Normal
+  else if (anchoredTabs.length && dst.rank === TabRank.Pinned) {
+    console.log('Pinned <- Anchored -- Normal', { pinnedTabs, anchoredTabs, normalTabs })
+
+    for (const tab of anchoredTabs) Tabs.setRank(tab, TabRank.Pinned)
+    toPinNatively = anchoredTabs
+  }
+
+  // Pinned -- Anchored -> Normal
+  else if (anchoredTabs.length && dst.rank === TabRank.Regular) {
+    console.log('Pinned -- Anchored -> Normal', { pinnedTabs, anchoredTabs, normalTabs })
+
+    for (const tab of anchoredTabs) Tabs.setRank(tab, TabRank.Regular)
+  }
+
+  //#region
+  // All tabs are pinned or anchored and was handled
+  if (!allTabs.length) {
     Sidebar.recalcTabsPanels()
     Tabs.cacheTabsData()
 
     // Switch panel
     if (
-      isPinnedActive &&
-      dst.pinned === undefined &&
+      isAnchoredActive &&
+      !dst.rank &&
       dst.panelId !== undefined &&
       Settings.state.tabsPanelSwitchActMove
     ) {
@@ -180,10 +196,12 @@ export async function move(
   }
 
   // Info about the moved tabs previous state:
-  const oneAfterAnother = tabs.every((tab, ix) => ix === 0 || tab.index === tabs[ix - 1].index + 1)
-  const srcIndex = tabs[0].index
+  const oneAfterAnother = allTabs.every(
+    (tab, ix) => ix === 0 || tab.index === allTabs[ix - 1].index + 1
+  )
+  const srcIndex = allTabs[0].index
 
-  const ids = tabs.map(t => t.id)
+  const ids = allTabs.map(t => t.id)
   const orphansToSave: ID[] = []
   let dstIndexIncluded = -1
   let prevIndex = 0
@@ -193,7 +211,7 @@ export async function move(
   let isUpdated = false
   let mediaPrevPanelId
   let srcPanelId
-  for (const tab of tabs) {
+  for (const tab of allTabs) {
     const parentStayStill = !ids.includes(tab.parentId)
 
     // Update parentId of orphans
@@ -245,7 +263,7 @@ export async function move(
 
     // Update parent-child relation
     const oldParent = Tabs.byId[tab.parentId]
-    if (tab.parentId !== dst.parentId && (!oldParent || !tabs.includes(oldParent))) {
+    if (tab.parentId !== dst.parentId && (!oldParent || !allTabs.includes(oldParent))) {
       tab.parentId = dst.parentId
 
       if (dstParent) browser.tabs.update(tab.id, { openerTabId: dst.parentId })
@@ -257,9 +275,9 @@ export async function move(
   if (dstTab) {
     const dstIndex = dstIndexIncluded !== -1 ? dstIndexIncluded : Tabs.list.indexOf(dstTab)
     if (dstIndex === -1) return Logs.warn('Tabs.move: Cannot find index of the dstTab')
-    Tabs.list.splice(dstIndex, 0, ...tabs)
+    Tabs.list.splice(dstIndex, 0, ...allTabs)
   } else {
-    Tabs.list.splice(Tabs.list.length, 0, ...tabs)
+    Tabs.list.splice(Tabs.list.length, 0, ...allTabs)
   }
 
   Tabs.updateTabsIndexes()
@@ -287,7 +305,7 @@ export async function move(
   // Switch panel
   if (
     isActive &&
-    dst.pinned === undefined &&
+    !dst.rank &&
     dst.panelId !== undefined &&
     Settings.state.tabsPanelSwitchActMove
   ) {
@@ -296,14 +314,14 @@ export async function move(
 
   // Update branch colors
   if (Settings.state.colorizeTabsBranches) {
-    for (const tab of tabs) {
+    for (const tab of allTabs) {
       Tabs.setBranchColor(tab.id)
     }
   }
 
   // Update custom colors
   if (Settings.state.inheritCustomColor && dstParent && dstParent.customColor) {
-    for (const tab of tabs) {
+    for (const tab of allTabs) {
       if (tab.customColor === dstParent.customColor) continue
       tab.reactive.customColor = tab.customColor = dstParent.customColor
     }
@@ -327,19 +345,20 @@ export async function move(
     if (p?.isGroup && !p.discarded) Tabs.updateGroupOrItsChild(p, NOID)
   }
 
-  tabs.forEach(t => Tabs.saveTabData(t.id))
+  allTabs.forEach(t => Tabs.saveTabData(t.id))
   orphansToSave.forEach(id => Tabs.saveTabData(id))
   Tabs.cacheTabsData()
 
   // Mark moving tabs
   Tabs.movingTabs.push(...ids)
-  tabs.forEach(t => (t.moving = true))
+  allTabs.forEach(t => (t.moving = true))
+  //#endregion
 
   // Update native tabs
   // ---
   // Unpin tab
-  if (toUnpin?.length) {
-    for (const tab of [...toUnpin].reverse()) {
+  if (toUnpinNatively?.length) {
+    for (const tab of [...toUnpinNatively].reverse()) {
       tab.unpinning = true
       await browser.tabs.update(tab.id, { pinned: false }).catch(err => {
         Logs.err('Tabs.move: Cannot unpin tab', err)
@@ -349,8 +368,8 @@ export async function move(
   }
 
   // Pin tab
-  if (toPin?.length) {
-    for (const tab of toPin) {
+  if (toPinNatively?.length) {
+    for (const tab of toPinNatively) {
       await browser.tabs.update(tab.id, { pinned: true, openerTabId: tab.id }).catch(err => {
         Logs.err('Tabs.move: Cannot pin tab', err)
       })
@@ -358,17 +377,17 @@ export async function move(
   }
 
   // Move tabs
-  const samePosition = srcIndex === tabs[0].index
+  const samePosition = srcIndex === allTabs[0].index
   const canSkipMove = oneAfterAnother && samePosition
   if (!canSkipMove) {
-    const nativeDstIndex = dst.index <= tabs[0].index ? dst.index : dst.index - 1
+    const nativeDstIndex = dst.index <= allTabs[0].index ? dst.index : dst.index - 1
     await browser.tabs.move(ids, { windowId: Windows.id, index: nativeDstIndex }).catch(err => {
       Logs.err('Tabs.move: Cannot move native tabs', err)
     })
   }
 
   // Reset moving tabs marks
-  tabs.forEach(t => (t.moving = undefined))
+  allTabs.forEach(t => (t.moving = undefined))
   movingTabs = []
 
   // Update visibility
@@ -440,7 +459,8 @@ export async function moveToThisWin(
 
   const probeTab = tabs[0]
   const isPinned = probeTab.pinned
-  const toPinned = dst?.pinned || (probeTab.pinned && dst?.pinned === undefined && !dst?.parentId)
+  const toPinned =
+    dst?.rank === TabRank.Pinned || (probeTab.pinned && !dst?.rank && !dst?.parentId)
   const srcWinId = probeTab.windowId
 
   let panel = Sidebar.panelsById[dst?.panelId ?? NOID]
@@ -477,10 +497,12 @@ export async function moveToThisWin(
     Tabs.list.splice(index + i, 0, tab)
 
     // Pin / Unpin
-    if (!!tab.pinned !== !!dst.pinned) {
-      if (!dst.pinned) tab.unpinning = true
-      await browser.tabs.update(tab.id, { pinned: !!dst.pinned })
-      tab.reactive.pinned = tab.pinned = !!dst.pinned
+    if (tab.rank !== dst.rank) {
+      if (dst.rank !== TabRank.Pinned) tab.unpinning = true
+      await browser.tabs.update(tab.id, { pinned: dst.rank === TabRank.Pinned })
+      if (dst.rank === TabRank.Pinned) Tabs.setRank(tab, TabRank.Pinned)
+      else if (dst.rank === TabRank.Anchored) Tabs.setRank(tab, TabRank.Anchored)
+      else Tabs.setRank(tab, TabRank.Regular)
       if (tab.unpinning) tab.unpinning = false
     }
 
@@ -740,7 +762,7 @@ export async function moveToNewPanel(tabIds: ID[]): Promise<void> {
 
   // Move
   const items = Tabs.getTabsInfo(tabIds)
-  const src = { windowId: Windows.id, panelId: srcPanel.id, pinned: probeTab.pinned }
+  const src = { windowId: Windows.id, panelId: srcPanel.id, rank: probeTab.rank }
   await Tabs.move(items, src, { panelId: dstPanel.id, index: dstPanel.nextTabIndex })
 }
 
@@ -846,7 +868,7 @@ function moveTabToPanel(tab: T.Tab, panelId: ID) {
   // TODO: why I use moveNewTabParent here? add config specifically for this case (move by rule)
   const moveToPanelStart = Settings.state.moveNewTabParent === 'start'
   const index = moveToPanelStart ? panel.startTabIndex : panel.nextTabIndex
-  const src: T.SrcPlaceInfo = { windowId: Windows.id, pinned: tab.pinned }
+  const src: T.SrcPlaceInfo = { windowId: Windows.id, rank: tab.rank }
   const dst: T.DstPlaceInfo = { panelId, index }
   Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst)
 
@@ -871,7 +893,7 @@ export function moveTabToPanelViaOmnibox(tabId: ID, panelId: ID) {
   const index = panel.nextTabIndex
   const windowId = Windows.id
 
-  const src: T.SrcPlaceInfo = { windowId, pinned: tab.pinned }
+  const src: T.SrcPlaceInfo = { windowId, rank: tab.rank }
   const dst: T.DstPlaceInfo = { windowId, panelId, index }
   Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst)
 
@@ -920,7 +942,7 @@ export async function moveTabToGroupViaOmnibox(tabInfo: T.ItemInfo, srcWinId: ID
   if (groupTab.folded || groupTab.invisible) Tabs.expTabsBranch(groupTabId, false)
 
   const src: T.SrcPlaceInfo = { windowId: srcWinId }
-  const dst: T.DstPlaceInfo = { windowId, panelId, parentId: groupTabId, index, pinned: false }
+  const dst: T.DstPlaceInfo = { windowId, panelId, parentId: groupTabId, index, rank: TabRank.Regular }
   await Utils.GLOBAL_QUEUE.add(Tabs.move, [tabInfo], src, dst)
 
   Tabs.scrollToTab(tabInfo.id)

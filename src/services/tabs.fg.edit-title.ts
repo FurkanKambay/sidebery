@@ -4,6 +4,7 @@ import * as Tabs from 'src/services/tabs.fg'
 import * as Utils from 'src/utils'
 import * as Windows from 'src/services/windows.fg'
 import * as IPC from 'src/services/ipc'
+import { TabRank } from 'src/enums'
 
 export let editableTabId = NOID
 export const setEditableTabId = (id: ID) => (editableTabId = id)
@@ -17,10 +18,14 @@ export async function editTabTitle(tabIds: ID[]) {
   const tab = Tabs.byId[firstTabId]
   if (!tab) return
 
-  if (tab.pinned) {
+  if (tab.rank === TabRank.Pinned) {
     const ptp = Settings.state.pinnedTabsPosition
     if (!Settings.state.pinnedTabsList) return
     if (ptp === 'left' || ptp === 'right') return
+  }
+
+  if (tab.rank === TabRank.Anchored) {
+    if (!Settings.state.anchoredTabsList) return
   }
 
   const hasFocus = document.hasFocus()

@@ -1,5 +1,5 @@
 import { DragInfo, DstPlaceInfo, ItemInfo, Panel, Tab, TabsPanel } from 'src/types'
-import { DstTreePos, PanelType } from 'src/enums'
+import { DstTreePos, PanelType, TabRank } from 'src/enums'
 import * as D from 'src/defaults'
 import * as Sidebar from 'src/services/sidebar.fg'
 import * as Tabs from 'src/services/tabs.fg'
@@ -239,7 +239,7 @@ export async function createFromDragEvent(e: DragEvent, dst: DstPlaceInfo): Prom
         index: dst.index,
         cookieStoreId: container?.id,
         windowId: Windows.id,
-        pinned: dst.pinned,
+        pinned: dst.rank === TabRank.Pinned,
       }
 
       // With Ctrl: Open inactive (background) tab
@@ -270,7 +270,7 @@ export async function createFromDragEvent(e: DragEvent, dst: DstPlaceInfo): Prom
         index: dst.index,
         cookieStoreId: container?.id,
         windowId: Windows.id,
-        pinned: dst.pinned,
+        pinned: dst.rank === TabRank.Pinned,
       }
 
       // With Ctrl: Search in inactive (background) tab
@@ -453,8 +453,11 @@ export async function open(
       index = fallbackIndex + i
     }
 
+    // TODO FURKAN place anchored tabs before normal tabs in panel
+    // new behavior!
+
     // Normalize index for pinned tab
-    if (dst.pinned && index !== undefined) {
+    if (dst.rank !== TabRank.Regular && index !== undefined) {
       const lastPinnedTab = Tabs.pinned[Tabs.pinned.length - 1]
       const pinIndex = lastPinnedTab ? lastPinnedTab.index + 1 : 0
 
@@ -464,7 +467,7 @@ export async function open(
     if (!item.url && !item.title) continue
     if (!Settings.state.tabsTree && groupCreationNeeded) continue
     if (!Sidebar.hasTabs && groupCreationNeeded) continue
-    if (dst.pinned && groupCreationNeeded) continue
+    if (dst.rank !== TabRank.Regular && groupCreationNeeded) continue
     // TODO: handle tree lvl limit
     if (Settings.state.tabsTreeLimit !== 'none' && groupCreationNeeded) continue
 
@@ -474,19 +477,19 @@ export async function open(
         ? Utils.createGroupUrl(item.title)
         : Utils.sanitizeUrl(item.url, item.title),
       windowId: Windows.id,
-      pinned: dst.pinned,
+      pinned: dst.rank === TabRank.Pinned,
       active: !!item.active,
       cookieStoreId: dst.containerId ?? item.container,
     }
 
     if (dst.discarded === undefined && items.length > 1) dst.discarded = true
-    if (dst.discarded && conf.url && !conf.url.startsWith('a') && !dst.pinned && !conf.active) {
+    if (dst.discarded && conf.url && !conf.url.startsWith('a') && !dst.rank && !conf.active) {
       conf.discarded = true
       conf.title = item.title
     }
 
     let parentId = D.NOID
-    if (!dst.pinned) {
+    if (!dst.rank) {
       if (item.parentId !== undefined && +idsMap[item.parentId] >= 0) {
         parentId = idsMap[item.parentId] ?? D.NOID
       } else if (parent) {
@@ -539,7 +542,7 @@ export async function reopenInContainer(ids: ID[], containerId: string) {
     const dst = { panelId: panel.id, containerId: containerId, index: panel.nextTabIndex }
     await Tabs.reopen(items, dst, idsMap)
   } else {
-    const dst = { panelId: firstTab.panelId, containerId, pinned: firstTab.pinned }
+    const dst = { panelId: firstTab.panelId, containerId, rank: firstTab.rank }
     await Tabs.reopen(items, dst, idsMap)
   }
 

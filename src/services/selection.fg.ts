@@ -1,7 +1,7 @@
 import * as Utils from 'src/utils'
 import * as Logs from 'src/services/logs'
 import { Tab, ItemInfo } from 'src/types'
-import { SelectionType } from 'src/enums'
+import { SelectionType, TabRank } from 'src/enums'
 import * as Settings from 'src/services/settings.fg'
 import * as Windows from 'src/services/windows.fg'
 import * as Bookmarks from 'src/services/bookmarks.fg'
@@ -68,6 +68,11 @@ export function getTabsInfo(setPanelId?: boolean): ItemInfo[] {
 export function hasPinnedTabs() {
   if (!selected.size) return undefined
   return Utils.someIter(selected.values(), tabId => Tabs.byId[tabId]?.pinned)
+}
+
+export function hasAnchoredTabs() {
+  if (!selected.size) return undefined
+  return Utils.someIter(selected.values(), tabId => Tabs.byId[tabId]?.rank === TabRank.Anchored)
 }
 
 export function hasLockedPinnedTabs() {
@@ -168,6 +173,10 @@ export function selectTab(tabId: ID): void {
 
   const hasPinned = hasPinnedTabs()
   if (hasPinned !== undefined && target.pinned !== hasPinned) return
+
+  const hasAnchored = hasAnchoredTabs()
+  const targetAnchored = target.rank === TabRank.Anchored
+  if (hasAnchored !== undefined && targetAnchored !== hasAnchored) return
 
   target.reactive.sel = target.sel = true
 

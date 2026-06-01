@@ -1,5 +1,5 @@
 import { ReactiveTabProps, Tab, TabSessionData } from 'src/types'
-import { TabStatus } from 'src/enums'
+import { TabRank, TabStatus } from 'src/enums'
 import * as Tabs from 'src/services/tabs.fg'
 import { NOID } from 'src/defaults'
 
@@ -9,6 +9,7 @@ export class MTab implements Tab {
   autoUnloadFoldedTimeout?: number | undefined
   invisible: boolean = false
   parentId: ID = NOID
+  rank: TabRank = TabRank.Regular
   panelId: ID = '123'
   prevPanelId: ID = NOID
   lvl: number = 0
@@ -45,7 +46,7 @@ export class MTab implements Tab {
     mediaPaused: false,
     containerColor: null,
     discarded: false,
-    pinned: false,
+    rank: TabRank.Regular,
     status: TabStatus.Complete,
     isParent: false,
     folded: false,

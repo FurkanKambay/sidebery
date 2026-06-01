@@ -1197,7 +1197,8 @@ export async function move(ids: ID[], dst: T.DstPlaceInfo): Promise<void> {
 }
 
 export function attachTabInfoToTitle(item: T.ItemInfo) {
-  if (item.pinned) item.title += ' ' + D.PIN_MARK
+  if (item.rank === E.TabRank.Pinned) item.title += ' ' + D.PIN_MARK
+  else if (item.rank === E.TabRank.Anchored) item.title += ' ' + D.ANCHOR_MARK
   if (item.container && item.container !== D.CONTAINER_ID) {
     const container = Containers.reactive.byId[item.container]
     if (container) item.title += ` [${Containers.getCPID(container)}]`
@@ -1216,7 +1217,14 @@ export function extractTabInfoFromTitle(item: T.ItemInfo, updateTitleOnly?: bool
   const pinIndex = item.title.indexOf(' ' + D.PIN_MARK)
   if (pinIndex !== -1) {
     item.title = item.title.slice(0, pinIndex) + item.title.slice(pinIndex + 1 + D.PIN_MARK.length)
-    if (!updateTitleOnly) item.pinned = true
+    if (!updateTitleOnly) item.rank = E.TabRank.Pinned
+  } else {
+    const anchorIndex = item.title.indexOf(' ' + D.ANCHOR_MARK)
+    if (anchorIndex !== -1) {
+      item.title =
+        item.title.slice(0, anchorIndex) + item.title.slice(anchorIndex + 1 + D.ANCHOR_MARK.length)
+      if (!updateTitleOnly) item.rank = E.TabRank.Anchored
+    }
   }
 
   item.title = item.title.replace(D.CONTAINER_IN_BOOKMARK_RE, (match, cpid) => {

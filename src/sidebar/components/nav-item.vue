@@ -200,9 +200,7 @@ function activateAudibleTab(): void {
 
   let mediaTab: Tab | undefined
   const findMedia = (t: Tab) => t.audible || t.mutedInfo?.muted || t.mediaPaused
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    mediaTab = props.item.pinnedTabs.find(findMedia)
-  }
+  mediaTab = props.item.anchoredTabs.find(findMedia)
   if (!mediaTab) mediaTab = props.item.tabs.find(findMedia)
   if (!mediaTab) return
 

@@ -1,7 +1,7 @@
 import * as Utils from 'src/utils'
 import { MenuOption, Window, Tab } from 'src/types'
 import * as D from 'src/defaults'
-import { Err } from 'src/enums'
+import { Err, TabRank } from 'src/enums'
 import { translate } from 'src/dict'
 import * as Tabs from 'src/services/tabs.fg'
 import * as Windows from 'src/services/windows.fg'
@@ -44,7 +44,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       else option.icon = 'icon_move_to_norm_win'
       option.onClick = () => {
         const items = Selection.getTabsInfo(true)
-        const dst = { windowId: wins[0].id, pinned: items[0]?.pinned }
+        const dst = { windowId: wins[0].id, rank: items[0]?.rank }
         Tabs.move(items, {}, dst)
       }
     } else {
@@ -55,7 +55,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
         const filter = (w: Window) => w.incognito === Windows.incognito
         const windowChooseConf = { title: option.label, otherWindows: true, filter }
         const items = Selection.getTabsInfo(true)
-        const dst = { windowChooseConf, pinned: items[0]?.pinned }
+        const dst = { windowChooseConf, rank: items[0]?.rank }
         Tabs.move(items, {}, dst)
       }
     }
@@ -66,7 +66,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
   moveToPanel: () => {
     const opts: MenuOption[] = []
     const probeTab = Tabs.byId[Selection.getFirst()]
-    if (!probeTab || (probeTab.pinned && Settings.state.pinnedTabsPosition !== 'panel')) return
+    if (!probeTab || probeTab.pinned) return
 
     for (const panel of Sidebar.panels) {
       if (!Utils.isTabsPanel(panel)) continue
@@ -80,7 +80,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
         color: panel.color,
         onClick: () => {
           const items = Selection.getTabsInfo(true)
-          const src = { windowId: Windows.id, panelId: probeTab.panelId, pinned: probeTab.pinned }
+          const src = { windowId: Windows.id, panelId: probeTab.panelId, rank: probeTab.rank }
           Tabs.move(items, src, { panelId: panel.id, index: panel.nextTabIndex })
         },
       })
@@ -91,7 +91,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
 
   moveToNewPanel: () => {
     const probeTab = Tabs.byId[Selection.getFirst()]
-    if (!probeTab || (probeTab.pinned && Settings.state.pinnedTabsPosition !== 'panel')) return
+    if (!probeTab || probeTab.pinned) return
 
     const option: MenuOption = {
       label: translate('menu.tab.move_to_new_panel'),
@@ -111,8 +111,8 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       icon: Windows.incognito ? 'icon_reopen_in_new_norm_window' : 'icon_reopen_in_new_priv_win',
       onClick: () => {
         const items = Selection.getTabsInfo(true)
-        const pinned = items[0]?.pinned
-        Tabs.reopen(items, { windowId: D.NEWID, incognito: !Windows.incognito, pinned })
+        const rank = items[0]?.rank
+        Tabs.reopen(items, { windowId: D.NEWID, incognito: !Windows.incognito, rank })
       },
     }
   },
@@ -135,8 +135,8 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       }
       option.onClick = () => {
         const items = Selection.getTabsInfo(true)
-        const pinned = items[0]?.pinned
-        Tabs.reopen(items, { windowId: wins[0].id, containerId, pinned })
+        const rank = items[0]?.rank
+        Tabs.reopen(items, { windowId: wins[0].id, containerId, rank })
       }
     } else {
       option.label = translate('menu.tab.reopen_in_window_')
@@ -145,12 +145,12 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       option.onClick = () => {
         const filter = (w: Window) => w.incognito !== Windows.incognito
         const items = Selection.getTabsInfo(true)
-        const pinned = items[0]?.pinned
+        const rank = items[0]?.rank
         Tabs.reopen(items, {
           windowId: D.ASKID,
           windowChooseConf: { title: option.label, otherWindows: true, filter },
           containerId,
-          pinned,
+          rank,
         })
       }
     }
@@ -257,6 +257,18 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       label: translate('menu.tab.' + (firstTab.pinned ? 'unpin' : 'pin')),
       icon: 'icon_pin',
       onClick: firstTab.pinned ? () => Tabs.unpinTabs(selected) : () => Tabs.pinTabs(selected),
+    }
+  },
+
+  anchor: () => {
+    const selected = Selection.ids()
+    const firstTab = Tabs.byId[selected[0]]
+    if (!firstTab) return
+    const isAnchored = firstTab.rank === TabRank.Anchored
+    return {
+      label: translate('menu.tab.' + (isAnchored ? 'unanchor' : 'anchor')),
+      icon: 'icon_pin',
+      onClick: isAnchored ? () => Tabs.unanchorTabs(selected) : () => Tabs.anchorTabs(selected),
     }
   },
 
@@ -522,11 +534,15 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       onClick: () => Tabs.editTabTitle(Selection.ids()),
     }
 
-    if (firstTab.pinned) {
+    if (firstTab.rank === TabRank.Pinned) {
       option.inactive =
         !Settings.state.pinnedTabsList ||
         Settings.state.pinnedTabsPosition === 'left' ||
         Settings.state.pinnedTabsPosition === 'right'
+    }
+
+    if (firstTab.rank === TabRank.Anchored) {
+      option.inactive = !Settings.state.anchoredTabsList
     }
 
     if (!Settings.state.ctxMenuRenderInact && option.inactive) return
@@ -721,7 +737,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
     if (!Utils.isTabsPanel(panel)) return
 
     const tabIds: ID[] = []
-    panel.pinnedTabs.forEach(t => t.audible && tabIds.push(t.id))
+    panel.anchoredTabs.forEach(t => t.audible && tabIds.push(t.id))
     panel.tabs.forEach(t => t.audible && tabIds.push(t.id))
     const option: MenuOption = {
       label: translate('menu.tabs_panel.mute_all_audible'),
@@ -770,7 +786,7 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
     if (!Utils.isTabsPanel(panel)) return
 
     const tabIds: ID[] = []
-    panel.pinnedTabs.forEach(t => tabIds.push(t.id))
+    panel.anchoredTabs.forEach(t => tabIds.push(t.id))
     panel.tabs.forEach(t => tabIds.push(t.id))
     const option: MenuOption = {
       label: translate('menu.tabs_panel.discard'),

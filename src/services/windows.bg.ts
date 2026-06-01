@@ -9,6 +9,7 @@ import * as Omnibox from 'src/services/omnibox.bg'
 import * as Sidebar from 'src/services/sidebar.bg'
 import * as Utils from 'src/utils'
 import { translate } from 'src/dict'
+import { TabRank } from 'src/enums'
 
 export const byId = new Map<ID, BgWindow>()
 export let lastFocusedId = NOID
@@ -110,11 +111,11 @@ export async function createWithTabs(
     for (const info of tabsInfo) {
       type CreateProps = browser.tabs.CreateProperties
       const conf: CreateProps = { url: info.url, windowId: window.id, index: index++ }
-      if (info.pinned) conf.pinned = true
+      if (info.rank === TabRank.Pinned) conf.pinned = true
       if (info.active) conf.active = true
       else conf.active = false
 
-      if (info.url && !info.pinned && !info.active) conf.discarded = true
+      if (info.url && info.rank !== TabRank.Pinned && !info.active) conf.discarded = true
       if (info.title && conf.discarded) conf.title = info.title
       if (!isPrivate && info.container !== undefined && Containers.reactive.byId[info.container]) {
         conf.cookieStoreId = info.container
@@ -159,7 +160,7 @@ export async function createWithTabs(
     if (tab.cookieStoreId !== defaultContainerId) cachedData.ctx = tab.cookieStoreId
     if (srcInfo.customTitle) cachedData.customTitle = srcInfo.customTitle
     if (srcInfo.customColor) cachedData.customColor = srcInfo.customColor
-    if (srcInfo.pinned) cachedData.pin = true
+    if (srcInfo.rank) cachedData.rank = srcInfo.rank
     if (srcInfo.folded) cachedData.folded = true
     cache.push(cachedData)
 
@@ -167,6 +168,7 @@ export async function createWithTabs(
     const sessionData: TabSessionData = {
       id: tab.id,
       panelId: srcInfo.panelId ?? NOID,
+      rank: srcInfo.rank ?? TabRank.Regular,
       parentId: tab.parentId ?? NOID,
       folded: !!srcInfo.folded,
     }

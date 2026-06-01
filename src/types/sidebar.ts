@@ -128,7 +128,7 @@ export interface TabsPanelConfig extends PanelConfigCommonProps {
 export interface TabsPanel extends PanelCommonProps, TabsPanelConfig {
   type: E.PanelType.tabs
   tabs: Tab[]
-  pinnedTabs: Tab[]
+  anchoredTabs: Tab[]
   filteredTabs?: Tab[]
   updatedTabs: ID[]
   selNewTab: boolean
@@ -145,7 +145,7 @@ export interface TabsPanel extends PanelCommonProps, TabsPanelConfig {
 
 export interface TabsPanelReactiveProps extends PanelCommonReactiveProps {
   visibleTabIds: ID[]
-  pinnedTabIds: ID[]
+  anchoredTabIds: ID[]
 
   updated: boolean
   selNewTab: boolean

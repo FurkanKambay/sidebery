@@ -221,7 +221,7 @@ declare namespace browser {
       lastAccessed: number
       mutedInfo?: MutedInfo
       openerTabId?: ID
-      pinned: boolean
+      pinned: boolean // TODO FURKAN remove most refs to this through sidebery's Tab interface
       sessionId?: string
       status?: string
       successorTabId?: ID

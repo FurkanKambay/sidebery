@@ -214,7 +214,7 @@ function appendMoveToGroupCmds(commands: OmniCmd[]) {
   const prefix = Settings.state.omniMoveToGroupPrefix.trim()
 
   for (const tab of Object.values(Tabs.byId)) {
-    if (tab.pinned) continue
+    if (tab.rank) continue
     if (!tab.isGroup) continue
 
     moveCmds.push({
@@ -350,7 +350,7 @@ async function runCmd(cmd: OmniCmd) {
     const srcWinId = activeTab.windowId
     const tabInfo = {
       id: activeTab.id,
-      pinned: activeTab.pinned,
+      rank: activeTab.rank,
     }
     try {
       await IPC.sidebar(dstWinId, 'moveTabToGroupViaOmnibox', tabInfo, srcWinId, cmd.tabId)

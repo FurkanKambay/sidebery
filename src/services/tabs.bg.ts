@@ -1,5 +1,5 @@
 import * as T from 'src/types'
-import { InstanceType } from 'src/enums'
+import { InstanceType, TabRank } from 'src/enums'
 import * as D from 'src/defaults'
 import * as Utils from 'src/utils'
 import * as Windows from 'src/services/windows.bg'
@@ -153,7 +153,7 @@ function openCachedWindow(cache: T.TabCache[]) {
       title: cachedTab.customTitle ?? cachedTab.url.replace(/^https?:\/\//, ''),
       parentId: cachedTab.parentId ?? D.NOID,
       panelId: cachedTab.panelId ?? D.NOID,
-      pinned: !!cachedTab.pin,
+      rank: cachedTab.rank,
       customColor: cachedTab.customColor,
       customTitle: cachedTab.customTitle,
       folded: !!cachedTab.folded,
@@ -813,7 +813,7 @@ export async function reopenTab(tab: T.BgTab, url: string, cookieStoreId?: strin
     cookieStoreId,
     active: tab.active,
     index,
-    pinned: tab.pinned,
+    pinned: tab.rank === TabRank.Pinned,
   })
   await browser.tabs.remove(tab.id)
 }

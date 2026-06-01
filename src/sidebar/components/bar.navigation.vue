@@ -490,9 +490,7 @@ async function onNavMouseDown(e: MouseEvent, item: T.NavItem) {
       // Remove tabs
       if (Settings.state.navTabsPanelMidClickAction === 'rm_all') {
         let toRemove = panel.tabs.map(t => t.id)
-        if (Settings.state.pinnedTabsPosition === 'panel') {
-          panel.pinnedTabs.forEach(t => toRemove.push(t.id))
-        }
+        panel.anchoredTabs.forEach(t => toRemove.push(t.id))
 
         if (toRemove.length) Tabs.removeTabs(toRemove)
       }
@@ -510,7 +508,7 @@ async function onNavMouseDown(e: MouseEvent, item: T.NavItem) {
       // Remove active tab
       if (Settings.state.navTabsPanelMidClickAction === 'rm_act_tab') {
         let actTab = Tabs.byId[Tabs.activeId]
-        if (actTab && actTab.panelId === item.id && !actTab.pinned) {
+        if (actTab && actTab.panelId === item.id && actTab.rank === E.TabRank.Regular) {
           Tabs.removeTabs([Tabs.activeId])
         }
       }
@@ -518,7 +516,7 @@ async function onNavMouseDown(e: MouseEvent, item: T.NavItem) {
       // Discard(unload) tabs
       if (Settings.state.navTabsPanelMidClickAction === 'discard') {
         const ids: ID[] = []
-        panel.pinnedTabs.forEach(t => ids.push(t.id))
+        panel.anchoredTabs.forEach(t => ids.push(t.id))
         panel.tabs.forEach(t => ids.push(t.id))
         if (ids.length) Tabs.discardTabs(ids)
       }
@@ -690,7 +688,7 @@ function onNavDragStart(e: DragEvent, item: T.NavItem) {
     items: dragItems,
     windowId: Windows.id,
     incognito: Windows.incognito,
-    pinnedTabs: false,
+    tabsRank: E.TabRank.Regular,
     x: e.clientX,
     y: e.clientY,
     index: Sidebar.reactive.nav.indexOf(item.id),

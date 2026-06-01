@@ -384,7 +384,7 @@ function onSave(): void {
     }
     if (Utils.isTabsPanel(mPanel) && moveTab) {
       const items = Tabs.getTabsInfo([tab.id])
-      const src = { windowId: Windows.id, panelId: tab.panelId, pinned: tab.pinned }
+      const src = { windowId: Windows.id, panelId: tab.panelId, rank: tab.rank }
       Tabs.move(items, src, { panelId: mPanel.id, index: mPanel.nextTabIndex })
 
       if (tab.active && Settings.state.tabsPanelSwitchActMoveAuto) {

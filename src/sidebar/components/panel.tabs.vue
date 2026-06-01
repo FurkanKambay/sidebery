@@ -7,7 +7,7 @@
   @mouseleave="onMouseLeave"
   @dblclick="onDoubleClick"
   @drop="onDrop")
-  PinnedTabsBar(data-rank="anchored" v-if="panel.reactive.pinnedTabIds.length" :panel="panel")
+  PinnedTabsBar(data-rank="anchored" v-if="panel.reactive.anchoredTabIds.length" :panel="panel")
   ScrollBox(ref="scrollBox" :preScroll="D.PRE_SCROLL")
     DragAndDropPointer(:panelId="panel.id" :subPanel="false")
     AnimatedTabList(:panel="panel")
@@ -113,7 +113,7 @@ function onMouseDown(e: MouseEvent): void {
     if (ma === 'undo') Tabs.undoRmTab()
     if (ma === 'rm_act_tab') {
       let actTab = Tabs.byId[Tabs.activeId]
-      if (actTab && actTab.panelId === props.panel.id && !actTab.pinned) {
+      if (actTab && actTab.panelId === props.panel.id && actTab.rank === E.TabRank.Regular) {
         Tabs.removeTabs([Tabs.activeId])
       }
     }

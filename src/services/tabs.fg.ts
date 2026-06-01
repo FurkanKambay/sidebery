@@ -1,5 +1,5 @@
 import * as T from 'src/types'
-import { TabStatus, LoadSrc, Err } from 'src/enums'
+import { TabStatus, LoadSrc, Err, TabRank } from 'src/enums'
 import * as D from 'src/defaults'
 import { translate } from 'src/dict'
 import * as Utils from 'src/utils'
@@ -134,7 +134,7 @@ export function mutateNativeTabToSideberyTab(nativeTab: T.NativeTab): T.Tab {
       mediaPaused: tab.mediaPaused,
       containerColor: Containers.reactive.byId[tab.cookieStoreId]?.color ?? null,
       discarded: tab.discarded ?? false,
-      pinned: tab.pinned,
+      rank: tab.rank,
       status: getStatus(tab),
       isParent: tab.isParent,
       folded: tab.folded,
@@ -205,7 +205,7 @@ export async function load(src?: LoadSrc): Promise<void> {
 
   // Scroll to active tab
   const activeTab = Tabs.byId[Tabs.activeId]
-  if (activeTab && !activeTab.pinned) Tabs.scrollToTab(activeTab.id)
+  if (activeTab && activeTab.rank === TabRank.Regular) Tabs.scrollToTab(activeTab.id)
 
   // Update active group page
   if (activeTab && activeTab.isGroup) Tabs.updateGroupOrItsChild(activeTab)
@@ -388,7 +388,7 @@ async function restoreTabsState(src?: LoadSrc, ignoreLockedTabs?: boolean): Prom
 
   const activeTab = tabs.find(t => t.active)
   if (activeTab) {
-    const actTabIsGloballyPinned = activeTab.pinned && Settings.state.pinnedTabsPosition !== 'panel'
+    const actTabIsGloballyPinned = activeTab.rank === TabRank.Pinned
     const currentActivePanel = Sidebar.panelsById[Sidebar.activePanelId]
 
     if (Utils.isTabsPanel(currentActivePanel)) {
@@ -402,9 +402,9 @@ async function restoreTabsState(src?: LoadSrc, ignoreLockedTabs?: boolean): Prom
       if (!actTabIsGloballyPinned) {
         targetPanel = Sidebar.panelsById[activeTab.panelId]
       }
-      // or switch to panel of the first not pinned tab if active panel is hidden or not set
+      // or switch to panel of the first regular tab if active panel is hidden or not set
       else if (currentActivePanelHidden || Sidebar.activePanelId === D.NOID) {
-        const panelId = tabs.find(t => !t.pinned)?.panelId
+        const panelId = tabs.find(t => t.rank === TabRank.Regular)?.panelId
         if (panelId) targetPanel = Sidebar.panelsById[panelId]
       }
 
@@ -434,18 +434,13 @@ async function restoreTabsState(src?: LoadSrc, ignoreLockedTabs?: boolean): Prom
 async function restoreTabPanelsContent(tabs: T.Tab[]) {
   // Get sorted tabs
   let sortedTabs: T.Tab[] = []
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const panel of Sidebar.panels) {
-      sortedTabs = sortedTabs.concat(tabs.filter(t => t.pinned && t.panelId === panel.id))
-    }
-  } else {
-    for (const tab of tabs) {
-      if (tab.pinned) sortedTabs.push(tab)
-      else break
-    }
+  for (const tab of tabs) {
+    if (tab.rank === TabRank.Pinned) sortedTabs.push(tab)
+    else break
   }
   for (const panel of Sidebar.panels) {
-    sortedTabs = sortedTabs.concat(tabs.filter(t => !t.pinned && t.panelId === panel.id))
+    sortedTabs.push(...tabs.filter(t => t.rank === TabRank.Anchored && t.panelId === panel.id))
+    sortedTabs.push(...tabs.filter(t => t.rank === TabRank.Regular && t.panelId === panel.id))
   }
 
   // Check if sorted and native tabs have different orders
@@ -517,7 +512,7 @@ function restoreTab(
   const panel = Sidebar.panelsById[props?.panelId ?? D.NOID]
   if (panel) {
     // Panel is found
-    if (tab.pinned && Settings.state.pinnedTabsPosition !== 'panel') {
+    if (tab.rank === TabRank.Pinned) {
       // Set the first tabs panel (fallbackPanelId) as the panel for global pinned tabs
       tab.panelId = fallbackPanelId
     } else {
@@ -568,7 +563,7 @@ function restoreTabsFromCache(
     const tab = restoreTab(nativeTab, idsMap, fallbackPanel.id, data)
 
     // Update fallback panel so the next tab without panelId will be appended to it
-    if (!tab.pinned) fallbackPanel = Sidebar.panelsById[tab.panelId] ?? fallbackPanel
+    if (tab.rank === TabRank.Regular) fallbackPanel = Sidebar.panelsById[tab.panelId] ?? fallbackPanel
 
     Tabs.reactivateTab(tab)
     Tabs.byId[tab.id] = tab
@@ -608,7 +603,7 @@ function restoreTabsFromSessionData(
     const tab = restoreTab(nativeTab, idsMap, fallbackPanel.id, data)
 
     // Update fallback panel so the next tab without panelId will be appended to it
-    if (!tab.pinned) fallbackPanel = Sidebar.panelsById[tab.panelId] ?? fallbackPanel
+    if (tab.rank === TabRank.Regular) fallbackPanel = Sidebar.panelsById[tab.panelId] ?? fallbackPanel
 
     Tabs.reactivateTab(tab)
     Tabs.byId[tab.id] = tab
@@ -661,7 +656,8 @@ function findCachedData(
       // Match
       const blindspot = tab.status === 'loading' && tab.url === 'about:blank'
       if (blindspot) blindspotCounter++
-      if ((tabData.url === tab.url && !!tabData.pin === tab.pinned) || blindspot) {
+      const isGlobalPin = tabData.rank === TabRank.Pinned
+      if ((tabData.url === tab.url && isGlobalPin === tab.pinned) || blindspot) {
         existedTabs[tab.id] = tabData
         equalityCounter++
       }
@@ -723,7 +719,7 @@ export function cacheTabsData(delay = 300): void {
     const data = []
     for (const tab of Tabs.list) {
       const info: T.TabCache = { id: tab.id, url: tab.url }
-      if (tab.pinned) info.pin = true
+      if (tab.rank) info.rank = tab.rank
       if (+tab.parentId > -1) info.parentId = tab.parentId
       if (tab.panelId !== D.NOID) info.panelId = tab.panelId
       if (tab.folded) info.folded = tab.folded
@@ -786,6 +782,7 @@ function _saveTabData(tabId: ID, forced?: boolean): void {
       data.parentId === tab.parentId &&
       data.folded === tab.folded &&
       data.panelId === tab.panelId &&
+      data.rank === tab.rank &&
       data.customColor === tab.customColor &&
       data.customTitle === tab.customTitle
     ) {
@@ -794,12 +791,14 @@ function _saveTabData(tabId: ID, forced?: boolean): void {
 
     data.id = tabId
     data.panelId = tab.panelId
+    data.rank = tab.rank
     data.parentId = tab.parentId
     data.folded = tab.folded
   } else {
     data = {
       id: tabId,
       panelId: tab.panelId,
+      rank: tab.rank,
       parentId: tab.parentId,
       folded: tab.folded,
     }
@@ -878,10 +877,9 @@ export function switchTab(
     }, delay)
   }
 
-  const panelPinned = Settings.state.pinnedTabsPosition === 'panel'
   const visibleOnly = Settings.state.scrollThroughVisibleTabs
   const skipDiscarded = Settings.state.scrollThroughTabsSkipDiscarded
-  const isolatePlobPin = globPinned !== undefined && !panelPinned
+  const isolateGlobPins = globPinned !== undefined
 
   const activePanel = Sidebar.panelsById[Sidebar.activePanelId]
   if (!Utils.isTabsPanel(activePanel)) return
@@ -896,7 +894,8 @@ export function switchTab(
     tabs = [...Tabs.list]
   } else {
     tabs = [
-      ...(panelPinned ? activePanel.pinnedTabs : Tabs.pinned),
+      ...Tabs.pinned,
+      ...activePanel.anchoredTabs,
       ...(activePanel.filteredTabs ?? activePanel.tabs),
     ]
   }
@@ -924,7 +923,7 @@ export function switchTab(
   // Reset index if we're switching only between tabs of a certain pinned (globally) state
   // and the active tab has different pinned state
   if (startTab) {
-    if (isolatePlobPin && ((globPinned && !startTab.pinned) || (!globPinned && startTab.pinned))) {
+    if (isolateGlobPins && ((globPinned && !startTab.pinned) || (!globPinned && startTab.pinned))) {
       index = -1
     }
   }
@@ -948,7 +947,7 @@ export function switchTab(
       if (visibleOnly && t.invisible) continue
       if (skipDiscarded && t.discarded) continue
       // Switch between only globally-pinned or non-globally-pinned tabs
-      if (isolatePlobPin && ((globPinned && !t.pinned) || (!globPinned && t.pinned))) continue
+      if (isolateGlobPins && ((globPinned && !t.pinned) || (!globPinned && t.pinned))) continue
       target = t
       break
     }
@@ -958,7 +957,7 @@ export function switchTab(
   // Preselect
   if (presel) {
     Selection.resetSelection()
-    if (globaly && (!target.pinned || panelPinned) && target.panelId !== activePanel.id) {
+    if (globaly && (target.rank !== TabRank.Pinned) && target.panelId !== activePanel.id) {
       Sidebar.switchToPanel(target.panelId, true, true)
     }
     Selection.selectTab(target.id)
@@ -967,7 +966,7 @@ export function switchTab(
   }
   // Switch
   else if (target.id !== startTab?.id) {
-    if (globaly && (!target.pinned || panelPinned) && target.panelId !== activePanel.id) {
+    if (globaly && (target.rank !== TabRank.Pinned) && target.panelId !== activePanel.id) {
       Sidebar.switchToPanel(target.panelId, true, true)
     }
     Tabs.scrollToTab(target.id, false)
@@ -1105,6 +1104,15 @@ export async function discardTabs(tabIds: ID[] = [], explicit = false): Promise<
     })
   }
 
+  // Skip anchored tabs
+  if (Settings.state.anchoredNoUnload) {
+    tabIds = tabIds.filter(id => {
+      const tab = Tabs.byId[id]
+      if (!tab || tab.rank === TabRank.Anchored) return false
+      return true
+    })
+  }
+
   // Update succession for active tab to prevent switching to discarded tabs
   let activeTab = Tabs.byId[Tabs.activeId]
   if (activeTab) {
@@ -1212,17 +1220,23 @@ export function pinTabs(tabIds: ID[]): void {
       if (child.lvl <= tab.lvl) break
       if (child.parentId === tab.id) child.parentId = tab.parentId
     }
+    // tab.reactive.rank = tab.rank = TabRank.GlobalPinned
+    console.log('FURKAN pinTabs', { beforeRank: tab?.rank, tab })
     browser.tabs.update(tabId, { pinned: true }).catch(err => {
       Logs.err('Tabs.pinTabs: Cannot pin tab:', err)
     })
+    console.log('FURKAN pinTabs', { afterRank: tab?.rank, tab })
   }
 }
 export function unpinTabs(tabIds: ID[]): void {
   Tabs.sortTabIds(tabIds, true)
   for (const tabId of tabIds) {
+    const tab = Tabs.byId[tabId]
+    console.log('FURKAN unpinTabs', { beforeRank: tab?.rank, tab })
     browser.tabs.update(tabId, { pinned: false }).catch(err => {
       Logs.err('Tabs.unpinTabs: Cannot unpin tab:', err)
     })
+    console.log('FURKAN unpinTabs', { afterRank: tab?.rank, tab })
   }
 }
 export function repinTabs(tabIds: ID[]): void {
@@ -1234,9 +1248,40 @@ export function repinTabs(tabIds: ID[]): void {
       if (child.lvl <= tab.lvl) break
       if (child.parentId === tab.id) child.parentId = tab.parentId
     }
+    console.log('FURKAN repinTabs', { beforeRank: tab.rank, tab })
     browser.tabs.update(tabId, { pinned: !tab.pinned }).catch(err => {
       Logs.err('Tabs.repinTabs: Cannot repin tab:', err)
     })
+    console.log('FURKAN repinTabs', { afterRank: tab.rank, tab })
+  }
+}
+
+/**
+ * (un)Anchor tabs
+ */
+export function anchorTabs(tabIds: ID[]): void {
+  Tabs.sortTabIds(tabIds)
+  for (const tabId of tabIds) {
+    const tab = Tabs.byId[tabId]
+    if (!tab) continue
+    for (let i = tab.index + 1; i < Tabs.list.length; i++) {
+      const child = Tabs.list[i]
+      if (child.lvl <= tab.lvl) break
+      if (child.parentId === tab.id) child.parentId = tab.parentId
+    }
+    console.log('FURKAN anchorTabs', { beforeRank: tab.rank, tab })
+    Tabs.setRank(tab, TabRank.Anchored)
+    console.log('FURKAN anchorTabs', { afterRank: tab.rank, tab })
+  }
+}
+export function unanchorTabs(tabIds: ID[]): void {
+  Tabs.sortTabIds(tabIds, true)
+  for (const tabId of tabIds) {
+    const tab = Tabs.byId[tabId]
+    if (!tab) continue
+    console.log('FURKAN unanchorTabs', { beforeRank: tab.rank, tab })
+    Tabs.setRank(tab, TabRank.Regular)
+    console.log('FURKAN unanchorTabs', { afterRank: tab.rank, tab })
   }
 }
 
@@ -1261,9 +1306,9 @@ export async function duplicateTabs(tabIds: ID[], asChild?: boolean): Promise<vo
     const descendantsToDuplicate: [ID, ID][] = []
     let index = tab.index + 1
     let dstPanelId = tab.panelId
-    if (tab.pinned) {
+    if (tab.rank) {
       let panel
-      if (Settings.state.pinnedTabsPosition === 'panel') {
+      if (tab.rank === TabRank.Anchored) {
         panel = Sidebar.panelsById[tab.panelId]
         if (!Utils.isTabsPanel(panel)) return
       } else {
@@ -1715,7 +1760,7 @@ export function expTabsBranch(rootTabId: ID, noRecursive?: boolean, noAutoFold?:
 
   let count = 0
   for (const tab of Tabs.list) {
-    if (tab.pinned || tab.panelId !== tab.panelId) continue
+    if (tab.rank !== TabRank.Regular || tab.panelId !== tab.panelId) continue
     if (
       autoFoldTabs &&
       tab.id !== rootTabId &&
@@ -1927,7 +1972,7 @@ export function updateTabsTree(startIndex = 0, endIndex = -1): void {
     tab = Tabs.list[i]
     if (!tab) return Logs.err('Tabs.updateTabsTree: Cannot get tab')
 
-    if (tab.pinned) {
+    if (tab.rank !== TabRank.Regular) {
       tab.parentId = -1
       tab.reactive.lvl = tab.lvl = 0
       tab.invisible = false
@@ -1938,12 +1983,12 @@ export function updateTabsTree(startIndex = 0, endIndex = -1): void {
     prevTab = Tabs.list[i - 1]
 
     let parent = Tabs.byId[tab.parentId]
-    if (parent && (parent.pinned || parent.index >= tab.index)) {
+    if (parent && (parent.rank !== TabRank.Regular || parent.index >= tab.index)) {
       parent = undefined
     }
 
     // Parent is defined
-    if (parent && !parent.pinned && parent.panelId === tab.panelId) {
+    if (parent && parent.rank === TabRank.Regular && parent.panelId === tab.panelId) {
       if (parent.lvl === maxLvl) {
         parent.reactive.isParent = parent.isParent = false
         parent.reactive.folded = parent.folded = false
@@ -2097,9 +2142,8 @@ export function findSuccessorTab(tab: T.Tab, exclude?: readonly ID[]): T.Tab | u
   const dirPrev = Settings.activateAfterClosingPrev
   const stayInPanel = Settings.state.activateAfterClosingStayInPanel
 
-  if (tab.pinned && (dirNext || dirPrev)) {
+  if (tab.rank !== TabRank.Regular && (dirNext || dirPrev)) {
     let discardedFallback: T.Tab | undefined
-    const pinInPanels = Settings.state.pinnedTabsPosition === 'panel'
     const dirDir = dirNext ? 1 : -1
     const opDir = dirDir * -1
     if (Tabs.byId[tab.relGroupId]) {
@@ -2121,7 +2165,7 @@ export function findSuccessorTab(tab: T.Tab, exclude?: readonly ID[]): T.Tab | u
           continue
         }
 
-        if (foundTab.panelId === tab.panelId || !pinInPanels) target = foundTab
+        if (foundTab.panelId === tab.panelId || tab.pinned) target = foundTab
       }
     }
     // Search in pinned tabs before active
@@ -2137,13 +2181,13 @@ export function findSuccessorTab(tab: T.Tab, exclude?: readonly ID[]): T.Tab | u
           continue
         }
 
-        if (foundTab.panelId === tab.panelId || !pinInPanels) target = foundTab
+        if (foundTab.panelId === tab.panelId || tab.pinned) target = foundTab
       }
     }
     // Search in current panel
     if (!target) {
       let panel
-      if (pinInPanels) panel = Sidebar.panelsById[tab.panelId]
+      if (!tab.pinned) panel = Sidebar.panelsById[tab.panelId]
       else panel = Sidebar.panelsById[Sidebar.activePanelId]
       if (Utils.isTabsPanel(panel)) {
         for (const t of panel.tabs) {
@@ -2242,13 +2286,13 @@ export function findSuccessorTab(tab: T.Tab, exclude?: readonly ID[]): T.Tab | u
 
     // Out of panel scope detection
     if (mode === SuccessorSearchMode.InPanelTick || mode === SuccessorSearchMode.InPanelTack) {
-      if (!foundTab || foundTab.panelId !== panel.id || foundTab.pinned !== tab.pinned) {
+      if (!foundTab || foundTab.panelId !== panel.id || foundTab.rank !== tab.rank) {
         if (mode === SuccessorSearchMode.InPanelTick) mode = SuccessorSearchMode.InPanelTack
         else {
-          // Search in pinned tabs in current panel
-          if (panel.pinnedTabs.length) {
-            for (let i = panel.pinnedTabs.length; i--; ) {
-              const pTab = panel.pinnedTabs[i]
+          // Search in anchored tabs in current panel
+          if (panel.anchoredTabs.length) {
+            for (let i = panel.anchoredTabs.length; i--; ) {
+              const pTab = panel.anchoredTabs[i]
               if (!pTab) break
               if (skipDiscarded && pTab.discarded) {
                 if (!discardedFallback) discardedFallback = Tabs.byId[pTab.id]
@@ -2401,7 +2445,7 @@ export function writeActiveTabsHistory(prevTab: T.Tab, activeTab: T.Tab): void {
   g.actTabs.push(prevTab.id)
 
   // Panel
-  if (!prevTab.pinned || Settings.state.pinnedTabsPosition === 'panel') {
+  if (prevTab.rank !== TabRank.Pinned) {
     if (p.actTabOffset >= 0 && p.actTabOffset < p.actTabs.length && samePanel) {
       p.actTabs = p.actTabs.slice(0, p.actTabOffset)
       p.actTabOffset = -1
@@ -2428,7 +2472,7 @@ export function tabFlip() {
 
   let panelId
   if (Settings.state.tabsSecondClickActPrevPanelOnly) {
-    if (actTab.pinned && Settings.state.pinnedTabsPosition !== 'panel') {
+    if (actTab.rank === TabRank.Pinned) {
       panelId = Sidebar.activePanelId
     } else {
       panelId = actTab.panelId
@@ -2455,7 +2499,7 @@ export function getTabInfo(id: ID, setPanelId?: boolean): T.ItemInfo | undefined
     title: tab.title,
     active: tab.active,
     index: tab.index,
-    pinned: tab.pinned,
+    rank: tab.rank,
     container: tab.cookieStoreId,
   }
   if (tab.customTitle) info.customTitle = tab.customTitle
@@ -2478,7 +2522,7 @@ export function getTabsInfo(ids: ID[], setPanelId?: boolean): T.ItemInfo[] {
         title: tab.title,
         active: tab.active,
         index: tab.index,
-        pinned: tab.pinned,
+        rank: tab.rank,
         container: tab.cookieStoreId,
       }
       if (tab.folded) info.folded = true
@@ -2500,7 +2544,7 @@ export function getTabsInfo(ids: ID[], setPanelId?: boolean): T.ItemInfo[] {
             title: child.title,
             active: child.active,
             index: child.index,
-            pinned: child.pinned,
+            rank: child.rank,
             container: child.cookieStoreId,
           }
           if (child.folded) subInfo.folded = true
@@ -2614,7 +2658,7 @@ export async function pasteAfter(dstIds: ID[]) {
   const lastSelTab = Tabs.byId[lastSelTabId]
   if (!lastSelTab) return Logs.warn('Tabs.pasteAfter: No dst tab')
 
-  const pinned = lastSelTab.pinned
+  const rank = lastSelTab.rank
   const panelId = lastSelTab.panelId
   const parentId = lastSelTab.parentId
   let index = lastSelTab.index + 1
@@ -2626,7 +2670,7 @@ export async function pasteAfter(dstIds: ID[]) {
     index,
     parentId,
     discarded: true,
-    pinned,
+    rank,
     panelId,
   }
 
@@ -2648,7 +2692,7 @@ export async function paste(dst: T.DstPlaceInfo) {
   // Check/Normalize dst info
   // - Panel
   let dstPanel
-  if (dst.panelId === undefined && (!dst.pinned || Settings.state.pinnedTabsPosition === 'panel')) {
+  if (dst.panelId === undefined && dst.rank !== TabRank.Pinned) {
     dst.parentId = undefined
     dst.index = undefined
     dstPanel = Sidebar.panelsById[Sidebar.activePanelId]
@@ -2662,7 +2706,7 @@ export async function paste(dst: T.DstPlaceInfo) {
   }
   // - Parent tab
   let dstParent
-  if (!dst.pinned) {
+  if (dst.rank === TabRank.Regular) {
     if (dst.parentId === undefined) {
       dst.index = undefined
       dst.parentId = D.NOID
@@ -2682,14 +2726,14 @@ export async function paste(dst: T.DstPlaceInfo) {
       dst.index = dstParent.index + branchLen + 1
     } else if (dstPanel) {
       dst.index = dstPanel.nextTabIndex
-    } else if (dst.pinned) {
+    } else if (dst.rank === TabRank.Pinned) {
       dst.index = Tabs.pinned.length
     } else {
       return Logs.warn('Tabs.paste: No dst index')
     }
   } else {
     let indexIsOk = true
-    if (dst.pinned) {
+    if (dst.rank === TabRank.Pinned) {
       indexIsOk = dst.index >= 0 && dst.index <= Tabs.pinned.length
     } else {
       indexIsOk = dst.index >= Tabs.pinned.length
@@ -2708,7 +2752,7 @@ export async function paste(dst: T.DstPlaceInfo) {
   if (items.length === 1 && items[0]?.title && !items[0]?.url) {
     const query = items[0]?.title
 
-    if (dst.pinned) {
+    if (dst.rank === TabRank.Pinned) {
       browser.search.search({ query, disposition: 'NEW_TAB' })
     } else {
       const conf: browser.tabs.CreateProperties = {
@@ -2792,7 +2836,7 @@ export function switchToRecentlyActiveTab(scope = SwitchingTabScope.global, dir:
       const tab = Tabs.byId[tabId]
       if (
         tab &&
-        (!tab.pinned || Settings.state.pinnedTabsPosition === 'panel') &&
+        (tab.rank !== TabRank.Pinned) &&
         tab.panelId !== Sidebar.activePanelId
       ) {
         Sidebar.activatePanel(tab.panelId)
@@ -2918,4 +2962,10 @@ export function renderFavicon(tab: T.Tab) {
     // Hide img
     if (imgEl) imgEl.style.display = 'none'
   }
+}
+
+export function setRank(tab: T.Tab, rank: TabRank) {
+  tab.pinned = rank === TabRank.Pinned
+  tab.reactive.rank = tab.rank = rank
+  return tab.rank
 }

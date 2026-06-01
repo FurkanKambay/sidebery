@@ -355,9 +355,8 @@ export function recalcTabsPanels(reset?: boolean): void {
   // Logs.info('Sidebar.recalcTabsPanels', reset)
   const pinnedTabIds: ID[] = []
   const pinnedTabs: T.Tab[] = []
-  const pinnedTabIdsByPanel: Record<ID, ID[]> = {}
-  const pinnedTabsByPanel: Record<ID, T.Tab[]> = {}
-  const pinnedInPanel = Settings.state.pinnedTabsPosition === 'panel'
+  const anchoredTabIdsByPanel: Record<ID, ID[]> = {}
+  const anchoredTabsByPanel: Record<ID, T.Tab[]> = {}
   const discarded: Record<ID, boolean> = {}
   let tabIndex = 0
   let tabPanelIndex = 0
@@ -367,13 +366,13 @@ export function recalcTabsPanels(reset?: boolean): void {
   let startIndex = -1
 
   const firstTabsPanel = panels.find(p => Utils.isTabsPanel(p))
-  for (; (tab = Tabs.list[tabIndex])?.pinned; tabIndex++) {
-    if (samePinned && Tabs.pinned[tabIndex]?.id !== tab.id) samePinned = false
+  for (; (tab = Tabs.list[tabIndex])?.rank; tabIndex++) {
+    if (tab.pinned && samePinned && Tabs.pinned[tabIndex]?.id !== tab.id) samePinned = false
 
-    if (pinnedInPanel) {
+    if (tab.rank === E.TabRank.Anchored) {
       let panel = panelsById[tab.panelId]
       if (!panel) {
-        Logs.warn('Cannot find panel for pinned tab', tab.panelId)
+        Logs.warn('Cannot find panel for anchored tab', tab.panelId)
         if (firstTabsPanel) {
           tab.panelId = firstTabsPanel.id
           panel = firstTabsPanel
@@ -382,23 +381,25 @@ export function recalcTabsPanels(reset?: boolean): void {
           continue
         }
       }
-      let pinnedTabIdsOfPanel = pinnedTabIdsByPanel[panel.id]
-      let pinnedTabsOfPanel = pinnedTabsByPanel[panel.id]
-      if (!pinnedTabsOfPanel) {
-        pinnedTabIdsOfPanel = pinnedTabIdsByPanel[panel.id] = []
-        pinnedTabsOfPanel = pinnedTabsByPanel[panel.id] = []
+      let anchoredTabIdsOfPanel = anchoredTabIdsByPanel[panel.id]
+      let anchoredTabsOfPanel = anchoredTabsByPanel[panel.id]
+      if (!anchoredTabsOfPanel) {
+        anchoredTabIdsOfPanel = anchoredTabIdsByPanel[panel.id] = []
+        anchoredTabsOfPanel = anchoredTabsByPanel[panel.id] = []
       }
       if (Utils.isTabsPanel(panel)) {
-        pinnedTabIdsOfPanel.push(tab.id)
-        pinnedTabsOfPanel.push(tab)
+        anchoredTabIdsOfPanel.push(tab.id)
+        anchoredTabsOfPanel.push(tab)
       }
 
       if (discarded[panel.id] === undefined) discarded[panel.id] = true
       if (!tab.discarded && discarded[panel.id]) discarded[panel.id] = false
     }
 
-    pinnedTabIds.push(tab.id)
-    pinnedTabs.push(tab)
+    if (tab.rank === E.TabRank.Pinned) {
+      pinnedTabIds.push(tab.id)
+      pinnedTabs.push(tab)
+    }
   }
 
   for (const panel of panels) {
@@ -407,14 +408,14 @@ export function recalcTabsPanels(reset?: boolean): void {
     const panelId = panel.id
     if (discarded[panelId] === undefined) discarded[panelId] = true
 
-    const pinnedTabIdsOfPanel = pinnedTabIdsByPanel[panelId]
-    const pinnedTabsOfPanel = pinnedTabsByPanel[panelId]
-    if (pinnedTabsOfPanel) {
-      panel.pinnedTabs = pinnedTabsOfPanel
-      panel.reactive.pinnedTabIds = pinnedTabIdsOfPanel
-    } else if (panel.pinnedTabs.length > 0) {
-      panel.pinnedTabs = []
-      panel.reactive.pinnedTabIds = []
+    const anchoredTabIdsOfPanel = anchoredTabIdsByPanel[panelId]
+    const anchoredTabsOfPanel = anchoredTabsByPanel[panelId]
+    if (anchoredTabsOfPanel) {
+      panel.anchoredTabs = anchoredTabsOfPanel
+      panel.reactive.anchoredTabIds = anchoredTabIdsOfPanel
+    } else if (panel.anchoredTabs.length > 0) {
+      panel.anchoredTabs = []
+      panel.reactive.anchoredTabIds = []
     }
 
     const panelTabIds: ID[] = []
@@ -440,20 +441,20 @@ export function recalcTabsPanels(reset?: boolean): void {
     }
 
     if (tabsCount) {
-      panel.reactive.len = tabsCount + panel.pinnedTabs.length
+      panel.reactive.len = tabsCount + panel.anchoredTabs.length
       panel.reactive.empty = false
       panel.startTabIndex = startIndex
       panel.endTabIndex = startIndex + tabsCount - 1
       panel.nextTabIndex = panel.endTabIndex + 1
     } else {
-      panel.reactive.len = panel.pinnedTabs.length
-      panel.reactive.empty = panel.pinnedTabs.length === 0
+      panel.reactive.len = panel.anchoredTabs.length
+      panel.reactive.empty = panel.anchoredTabs.length === 0
       panel.startTabIndex = tabIndex
       panel.endTabIndex = tabIndex
       panel.nextTabIndex = tabIndex
     }
 
-    if (pinnedTabsOfPanel?.length || tabsCount) {
+    if (anchoredTabsOfPanel?.length || tabsCount) {
       panel.allDiscarded = !!discarded[panelId]
     } else {
       panel.allDiscarded = false
@@ -542,18 +543,18 @@ export function checkDiscardedTabsInPanel(panelId: ID) {
   const panel = panelsById[panelId]
   if (!Utils.isTabsPanel(panel)) return
 
-  const pinnedTabsLen = panel.pinnedTabs.length
+  const anchoredTabsLen = panel.anchoredTabs.length
   const tabsLen = panel.tabs.length
 
-  if (tabsLen === 0 && pinnedTabsLen === 0) {
+  if (tabsLen === 0 && anchoredTabsLen === 0) {
     panel.allDiscarded = false
     panel.reactive.allDiscarded = false
     return
   }
 
   let discarded = true
-  if (pinnedTabsLen && Settings.state.pinnedTabsPosition === 'panel') {
-    if (panel.pinnedTabs.some(t => !t.discarded)) discarded = false
+  if (anchoredTabsLen) {
+    if (panel.anchoredTabs.some(t => !t.discarded)) discarded = false
   }
 
   if (discarded) {
@@ -1230,7 +1231,6 @@ export function activatePanel(panelId: ID, loadPanels = true, keepSearching?: bo
     Settings.state.hideInact &&
     isTabsPanel &&
     isPrevTabsPanel &&
-    Settings.state.pinnedTabsPosition !== 'panel' &&
     Tabs.byId[Tabs.activeId]?.pinned
   ) {
     Tabs.updateNativeTabsVisibility()
@@ -1272,7 +1272,7 @@ export function switchToPanel(
     Utils.isTabsPanel(panel) &&
     (panel.noEmpty || Settings.state.hideInact || Settings.state.hideEmptyPanels) &&
     !panel.tabs.length &&
-    !panel.pinnedTabs.length
+    !panel.anchoredTabs.length
   ) {
     Tabs.createTabInPanel(panel)
   }
@@ -1285,7 +1285,7 @@ export function switchToPanel(
   ) {
     // Do not switch tab if the current active tab is globally pinned
     const actTab = Tabs.byId[Tabs.activeId]
-    if (actTab && (!actTab.pinned || Settings.state.pinnedTabsPosition === 'panel')) {
+    if (actTab && !actTab.pinned) {
       Tabs.activateLastActiveTabOf(id)
     }
   }
@@ -1499,7 +1499,7 @@ export function closeHiddenPanelsPopup(withoutTabCreation?: boolean): void {
     Utils.isTabsPanel(panel) &&
     (panel.noEmpty || Settings.state.hideInact || Settings.state.hideEmptyPanels) &&
     !panel.tabs.length &&
-    !panel.pinnedTabs.length
+    !panel.anchoredTabs.length
   ) {
     Tabs.createTabInPanel(panel)
   }
@@ -1621,7 +1621,7 @@ export function hidePanel(panelId: ID) {
     const actTabPanel = panelsById[actTab?.panelId ?? D.NOID]
     if (
       actTab &&
-      (!actTab.pinned || Settings.state.pinnedTabsPosition === 'panel') &&
+      !actTab.pinned &&
       actTab.panelId !== panelId &&
       Utils.isTabsPanel(actTabPanel) &&
       !actTabPanel.hidden &&
@@ -1977,13 +1977,13 @@ export async function bookmarkTabsPanel(
   const dst: T.DstPlaceInfo = { parentId: panelFolderId }
   const idsMap: Partial<Record<ID, ID>> = {}
 
-  if (Settings.state.pinnedTabsPosition === 'panel' && panel.pinnedTabs.length) {
-    for (const rTab of panel.pinnedTabs) {
+  if (panel.anchoredTabs.length) {
+    for (const rTab of panel.anchoredTabs) {
       const tab = Tabs.byId[rTab.id]
       if (!tab) continue
       const info: T.ItemInfo = {
         id: tab.id,
-        pinned: true,
+        rank: E.TabRank.Anchored,
         title: tab.customTitle ?? tab.title,
         url: tab.url,
         parentId: tab.parentId,
@@ -2091,7 +2091,7 @@ export async function restoreFromBookmarks(panel: T.TabsPanel, silent?: boolean)
   }
 
   const existedNormalTabs = [...panel.tabs]
-  const existedPinnedTabs = [...panel.pinnedTabs]
+  const existedAnchoredTabs = [...panel.anchoredTabs]
 
   const idsMap: Record<ID, ID> = {}
   const reusedTabs: Record<ID, T.Tab> = {}
@@ -2138,22 +2138,22 @@ export async function restoreFromBookmarks(panel: T.TabsPanel, silent?: boolean)
       info.url = Utils.sanitizeUrl(node.url, info.title)
     }
 
-    const isPinned = info.pinned
+    const isAnchored = info.rank === E.TabRank.Anchored
 
     // Find existed tab
-    const existedTab = (isPinned ? existedPinnedTabs : existedNormalTabs).find(t => {
+    const existedTab = (isAnchored ? existedAnchoredTabs : existedNormalTabs).find(t => {
       const sameURL = t.url === rawUrl || t.url === info.url
       return sameURL && t.title === info.title && !reusedTabs[t.id]
     })
 
-    // Create pinned tab if needed
-    if (isPinned) {
+    // Create anchored tab if needed
+    if (isAnchored) {
       if (existedTab) continue
 
       const conf: browser.tabs.CreateProperties = {
         index: indexPinned,
         url: info.url,
-        pinned: true,
+        pinned: false,
         windowId: Windows.id,
         active: false,
         cookieStoreId: info.container,
@@ -2365,8 +2365,8 @@ export async function convertToBookmarksPanel(
 
   // Close tabs
   const tabsIds = []
-  if (Settings.state.pinnedTabsPosition === 'panel' && panel.pinnedTabs.length) {
-    tabsIds.push(...panel.pinnedTabs.map(t => t.id))
+  if (panel.anchoredTabs.length) {
+    tabsIds.push(...panel.anchoredTabs.map(t => t.id))
   }
   tabsIds.push(...panel.tabs.map(t => t.id))
   if (Tabs.list.length === tabsIds.length) await browser.tabs.create({})
@@ -2643,7 +2643,7 @@ export function switchPanelOnMouseLeave() {
   if (!activeTab) return
 
   if (activeTab.panelId === activePanel.id) return
-  if (activeTab.pinned && Settings.state.pinnedTabsPosition !== 'panel') return
+  if (activeTab.pinned) return
 
   activatePanel(activeTab.panelId)
 }
@@ -2668,7 +2668,7 @@ export function updateMediaStateOfPanel(panelId: ID, tab?: T.Tab) {
   const panel = panelsById[panelId]
   if (!Utils.isTabsPanel(panel)) return
 
-  if (tab && (!tab.pinned || Settings.state.pinnedTabsPosition === 'panel')) {
+  if (tab && !tab.pinned) {
     let tabMediaState = E.MediaState.Silent
     if (tab.mediaPaused) tabMediaState = E.MediaState.Paused
     else if (tab.mutedInfo?.muted) tabMediaState = E.MediaState.Muted
@@ -2700,14 +2700,12 @@ export function updateMediaStateOfPanel(panelId: ID, tab?: T.Tab) {
   let hasPaused = false
   let hasMuted = false
 
-  if (Settings.state.pinnedTabsPosition === 'panel') {
-    for (const t of panel.pinnedTabs) {
-      if (t.mediaPaused) hasPaused = true
-      else if (t.mutedInfo?.muted) hasMuted = true
-      else if (t.audible) {
-        panel.reactive.mediaState = E.MediaState.Audible
-        return
-      }
+  for (const t of panel.anchoredTabs) {
+    if (t.mediaPaused) hasPaused = true
+    else if (t.mutedInfo?.muted) hasMuted = true
+    else if (t.audible) {
+      panel.reactive.mediaState = E.MediaState.Audible
+      return
     }
   }
 
@@ -2729,7 +2727,7 @@ export function updateUpdatedStateOfPanel(panel?: T.Panel) {
   if (!Utils.isTabsPanel(panel)) return
 
   const updatedTabIds: ID[] = []
-  panel.pinnedTabs.forEach(t => t.updated && updatedTabIds.push(t.id))
+  panel.anchoredTabs.forEach(t => t.updated && updatedTabIds.push(t.id))
   panel.tabs.forEach(t => t.updated && updatedTabIds.push(t.id))
   panel.updatedTabs = updatedTabIds
   panel.reactive.updated = updatedTabIds.length > 0

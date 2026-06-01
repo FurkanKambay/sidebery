@@ -152,7 +152,7 @@ export interface DragItem {
   id: ID
   url?: string
   title?: string
-  pinned?: boolean
+  rank?: E.TabRank
   parentId?: ID
   container?: string
   customColor?: string
@@ -168,13 +168,13 @@ export interface DragInfo {
   incognito?: boolean
   windowId: ID
   panelId?: ID
-  pinnedTabs?: boolean
+  tabsRank?: E.TabRank
   index?: number
   copy?: boolean
 }
 
 export interface SrcPlaceInfo {
-  pinned?: boolean
+  rank?: E.TabRank
   panelId?: ID
   windowId?: ID
 }
@@ -185,7 +185,7 @@ export interface DstPlaceInfo {
   index?: number
   pos?: E.DstTreePos
   inside?: boolean
-  pinned?: boolean
+  rank?: E.TabRank
   containerId?: string
   windowId?: ID
   incognito?: boolean
@@ -196,14 +196,14 @@ export interface DstPlaceInfo {
 export interface TabsMoveConf {
   items?: ItemInfo[]
   itemIds?: ID[]
-  srcPinned?: boolean
+  srcRank?: E.TabRank
   srcPanelId?: ID
   srcWindowId?: ID
   dstPanelId?: ID
   dstParentId?: ID
   dstIndex?: number
   dstInside?: boolean
-  dstPinned?: boolean
+  dstRank?: E.TabRank
   dstContainerId?: string
   dstWindowId?: ID
   dstIncognito?: boolean

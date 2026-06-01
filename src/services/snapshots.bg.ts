@@ -1,5 +1,5 @@
 import { Snapshot, SnapTab, NormalizedSnapshot, SnapExportInfo, Stored } from 'src/types'
-import { RemovingSnapshotResult, SnapStoreMode, PanelType } from 'src/enums'
+import { RemovingSnapshotResult, SnapStoreMode, PanelType, TabRank } from 'src/enums'
 import { NOID, CONTAINER_ID, GROUP_URL, DEFAULT_CONTAINER_ID } from 'src/defaults'
 import * as Utils from 'src/utils'
 import * as Logs from 'src/services/logs'
@@ -65,10 +65,8 @@ export async function createSnapshot(auto = false): Promise<Snapshot | undefined
       const snapTab: SnapTab = { url: tab.url, title: tab.title, panelId: tab.panelId ?? NOID }
       const parent = snapTabsById[tab.parentId ?? NOID]
       if (parent && parent.panelId === tab.panelId) snapTab.lvl = (parent.lvl ?? 0) + 1
-      if (tab.pinned) {
-        snapTab.pinned = true
-        if (Settings.state.pinnedTabsPosition !== 'panel') snapTab.panelId = -1
-      }
+      if (tab.rank) snapTab.rank = tab.rank
+      if (tab.rank === TabRank.Pinned) snapTab.panelId = -1
       if (tab.folded) snapTab.folded = true
       if (tab.cookieStoreId !== CONTAINER_ID) snapTab.containerId = tab.cookieStoreId
       if (tab.customTitle) snapTab.customTitle = tab.customTitle
@@ -93,14 +91,14 @@ export async function createSnapshot(auto = false): Promise<Snapshot | undefined
       }
 
       // Pinned tabs
-      if (tab.pinned && targetGroup !== 'pinned') {
+      if (tab.rank !== TabRank.Regular && targetGroup !== 'pinned') {
         panelTabs = []
         winTabs.push(panelTabs)
         targetGroup = 'pinned'
       }
 
       // Tabs by panel
-      if (!tab.pinned && targetGroup !== tab.panelId) {
+      if (tab.rank === TabRank.Regular && targetGroup !== tab.panelId) {
         panelTabs = []
         winTabs.push(panelTabs)
         targetGroup = tab.panelId ?? NOID
@@ -353,7 +351,7 @@ async function adaptTabsPanels(snapshot: NormalizedSnapshot): Promise<void> {
     const newOrder: SnapTab[][] = []
 
     // Pinned tabs
-    if (win[0]?.[0]?.pinned) {
+    if (win[0]?.[0]?.rank) {
       newOrder.push(win[0])
       win.shift()
     }
@@ -443,7 +441,7 @@ async function openWindow(
       if (tab.customColor) tabInfo.customColor = tab.customColor
       tabsInfoByLvl[tab.lvl ?? 0] = tabInfo
 
-      if (tab.pinned) tabInfo.pinned = true
+      if (tab.rank) tabInfo.rank = tab.rank
 
       if (Utils.isGroupUrl(tab.url)) {
         const index = tab.url.indexOf('group.html') + 10

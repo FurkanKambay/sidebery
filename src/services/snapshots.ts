@@ -95,10 +95,11 @@ export function convertToMarkdown(snapshot: NormalizedSnapshot): string {
   const dateTimeStr = `${dateStr} - ${timeStr}`
   const md = [`# ${dateTimeStr}`, '']
   const globalPinnedTabs = []
-  const pinnedTabsByPanelId: Map<ID, SnapTab[]> = new Map()
+  const anchoredTabsByPanelId: Map<ID, SnapTab[]> = new Map()
 
   const indent = '  '
   const pinMark = '📌 '
+  const anchorMark = '📍 '
   const winIndent = ''
   const panelsIndent = Settings.state.snapMdFullTree ? indent : ''
   const tabsIndent = Settings.state.snapMdFullTree ? indent.repeat(2) : ''
@@ -106,16 +107,16 @@ export function convertToMarkdown(snapshot: NormalizedSnapshot): string {
   const panelBullet = Settings.state.snapMdFullTree ? '- ' : ''
   const tabBullet = '- '
 
-  // Gather pinned tabs
-  if (snapshot.tabs[0]?.[0]?.[0]?.pinned) {
+  // Gather pinned and anchored tabs
+  if (snapshot.tabs[0]?.[0]?.[0]?.rank) {
     const pinnedTabs = snapshot.tabs[0]?.[0]
     for (const tab of pinnedTabs) {
       const panelConfig = snapshot.sidebar.panels[tab.panelId]
       if (panelConfig) {
-        let panelPinnedTabs = pinnedTabsByPanelId.get(tab.panelId)
-        if (!panelPinnedTabs) panelPinnedTabs = []
-        panelPinnedTabs.push(tab)
-        pinnedTabsByPanelId.set(tab.panelId, panelPinnedTabs)
+        let panelAnchoredTabs = anchoredTabsByPanelId.get(tab.panelId)
+        if (!panelAnchoredTabs) panelAnchoredTabs = []
+        panelAnchoredTabs.push(tab)
+        anchoredTabsByPanelId.set(tab.panelId, panelAnchoredTabs)
       } else {
         globalPinnedTabs.push(tab)
       }
@@ -145,19 +146,19 @@ export function convertToMarkdown(snapshot: NormalizedSnapshot): string {
       if (!Utils.isTabsPanel(panel)) continue
 
       // Get tabs
-      const pinnedTabs = pinnedTabsByPanelId.get(id)
-      const normalTabs = win.find(p => p[0] && p[0].panelId === id && !p[0].pinned)
-      if (!pinnedTabs?.length && !normalTabs) continue
+      const anchoredTabs = anchoredTabsByPanelId.get(id)
+      const normalTabs = win.find(p => p[0] && p[0].panelId === id && !p[0].rank)
+      if (!anchoredTabs?.length && !normalTabs) continue
 
       // Create panel title
       const panelTitle = `### ${panel.name}`
       md.push(panelsIndent + panelBullet + panelTitle)
 
-      // Pinned tabs
-      if (pinnedTabs?.length) {
-        for (const tab of pinnedTabs) {
+      // Anchored tabs
+      if (anchoredTabs?.length) {
+        for (const tab of anchoredTabs) {
           const tabLink = `[${tab.title}](${tab.url})`
-          md.push(tabsIndent + tabBullet + pinMark + tabLink)
+          md.push(tabsIndent + tabBullet + anchorMark + tabLink)
         }
       }
 
@@ -244,7 +245,7 @@ export function minimizeSnapshot(snapshots: Snapshot[], snapshot: Snapshot): voi
           if (
             tab.url === tabN.url &&
             tab.title === tabN.title &&
-            tab.pinned === tabN.pinned &&
+            tab.rank === tabN.rank &&
             tab.containerId === tabN.containerId &&
             tab.panelId === tabN.panelId &&
             tab.lvl === tabN.lvl &&

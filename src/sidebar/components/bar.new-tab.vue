@@ -38,7 +38,7 @@
 import type { PropType } from 'vue'
 import { computed } from 'vue'
 import type { DragInfo, Container, DstPlaceInfo, ItemInfo, Tab, TabsPanel } from 'src/types'
-import { MenuType, DragType, DropType } from 'src/enums'
+import { MenuType, DragType, DropType, TabRank } from 'src/enums'
 import * as D from 'src/defaults'
 import { translate } from 'src/dict'
 import * as Utils from 'src/utils'
@@ -241,7 +241,7 @@ function onNewTabMouseUp(e: MouseEvent, btn?: NewTabBtn): void {
     if (e.ctrlKey) {
       Mouse.blockWheel()
       const actTab = Tabs.byId[Tabs.activeId]
-      if (actTab && !actTab.pinned && actTab.panelId === props.panel.id) {
+      if (actTab && actTab.rank === TabRank.Regular && actTab.panelId === props.panel.id) {
         Tabs.createChildTab(actTab.id, btn?.url, btn?.containerId)
       } else {
         Tabs.createTabInPanel(props.panel, newTabConf)
@@ -263,7 +263,7 @@ function onNewTabMouseUp(e: MouseEvent, btn?: NewTabBtn): void {
   else if (e.button === 1) {
     if (Settings.state.newTabMiddleClickAction === 'new_child') {
       const actTab = Tabs.byId[Tabs.activeId]
-      if (actTab && !actTab.pinned && actTab.panelId === props.panel.id) {
+      if (actTab && actTab.rank === TabRank.Regular && actTab.panelId === props.panel.id) {
         Tabs.createChildTab(actTab.id, btn?.url, btn?.containerId)
       } else {
         Tabs.createTabInPanel(props.panel, newTabConf)
@@ -394,7 +394,7 @@ function onDragStart(e: DragEvent, btn: NewTabBtn): void {
     items: [{ id: D.NEWID, container: btn.containerId, title: 'New tab', url: btn.url }],
     windowId: Windows.id,
     incognito: Windows.incognito,
-    pinnedTabs: false,
+    tabsRank: TabRank.Regular,
     x: e.clientX,
     y: e.clientY,
   }

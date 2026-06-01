@@ -42,7 +42,7 @@ export interface DragAndDropState {
   dstType: E.DropType
   dstIndex: number
   dstParentId: ID
-  dstPin: boolean
+  dstRank: E.TabRank
   dstPanelId: ID
 
   dragTooltipTitle: string
@@ -60,7 +60,7 @@ export let reactive: DragAndDropState = {
   dstIndex: -1,
   dstParentId: D.NOID,
   dstPanelId: D.NOID,
-  dstPin: false,
+  dstRank: E.TabRank.Regular,
   dragTooltipTitle: '',
   dragTooltipInfo: '',
 }
@@ -73,7 +73,7 @@ export let startY = 0
 
 export let srcType = E.DragType.Nothing
 export let srcIncognito = false
-export let srcPin = false
+export let srcRank = E.TabRank.Regular
 export let srcWinId = D.NOID
 export let srcPanelId = D.NOID
 export let srcIndex = -1
@@ -120,7 +120,7 @@ export function start(info: T.DragInfo, dstType?: E.DropType, dstPanelId?: ID): 
   startX = info.x
   startY = info.y
   srcIncognito = info.incognito ?? false
-  srcPin = info.pinnedTabs ?? false
+  srcRank = info.tabsRank ?? E.TabRank.Regular
   srcWinId = info.windowId
   srcPanelId = info.panelId
   srcIndex = info.index ?? -1
@@ -197,7 +197,7 @@ export function reset(): void {
   startX = 0
   startY = 0
   srcIncognito = false
-  srcPin = false
+  srcRank = E.TabRank.Regular
   srcWinId = D.NOID
   srcPanelId = D.NOID
   srcIndex = -1
@@ -206,7 +206,7 @@ export function reset(): void {
   reactive.dstType = E.DropType.Nowhere
   reactive.dstIndex = -1
   reactive.dstPanelId = D.NOID
-  reactive.dstPin = false
+  reactive.dstRank = E.TabRank.Regular
   reactive.dstParentId = D.NOID
 
   reactive.isStarted = false
@@ -294,8 +294,10 @@ function getDstInfo(): T.DstPlaceInfo {
   }
   const toTabs = DnD.reactive.dstType === E.DropType.Tabs
 
-  if (DnD.reactive.dstPin) info.pinned = true
-  else if (toTabs) info.pinned = false
+  if (DnD.reactive.dstRank === E.TabRank.Pinned) info.rank = E.TabRank.Pinned
+  else if (DnD.reactive.dstRank === E.TabRank.Anchored) info.rank = E.TabRank.Anchored
+  else if (toTabs) info.rank = E.TabRank.Regular
+  else info.rank = undefined
 
   const dstPanel = getDstPanel(DnD.reactive.dstType, info.panelId ?? D.NOID)
   if (!dstPanel) return info
@@ -373,7 +375,7 @@ function getSrcInfo(): T.SrcPlaceInfo {
   return {
     windowId: DnD.srcWinId,
     panelId: DnD.srcPanelId,
-    pinned: DnD.srcPin,
+    rank: DnD.srcRank,
   }
 }
 
@@ -458,8 +460,8 @@ function isContainerChanged(): boolean {
   const isDstContainerExists = isDstDefaultContainer || !!Containers.reactive.byId[dstContainer]
   if (!isDstContainerExists) return false
 
-  // Preserve container for globally pinned tabs
-  if (DnD.reactive.dstPin && Settings.state.pinnedTabsPosition !== 'panel') return false
+  // Preserve container for globally pinned and panel-anchored tabs
+  if (DnD.reactive.dstRank === E.TabRank.Pinned) return false
 
   // Check tabs
   for (const item of DnD.items) {
@@ -519,6 +521,7 @@ export function onDragEnter(e: DragEvent): void {
         y: e.clientX,
         type: E.DragType.Native,
         panelId: D.NOID,
+        tabsRank: E.TabRank.Regular,
         windowId: D.NOID,
       })
     }
@@ -537,7 +540,7 @@ export function onDragEnter(e: DragEvent): void {
   // Reset drag and drop if no type and id provided
   if (!type && !id) {
     DnD.reactive.dstType = E.DropType.Nowhere
-    DnD.reactive.dstPin = false
+    DnD.reactive.dstRank = E.TabRank.Regular
     return
   }
 
@@ -545,7 +548,7 @@ export function onDragEnter(e: DragEvent): void {
   if (type === 'bspb') {
     resetDragPointer()
 
-    DnD.reactive.dstPin = false
+    DnD.reactive.dstRank = E.TabRank.Regular
 
     const panel = Sidebar.panelsById[Sidebar.activePanelId]
     if (!Utils.isTabsPanel(panel)) {
@@ -571,7 +574,7 @@ export function onDragEnter(e: DragEvent): void {
   if (type === 'sspb') {
     resetDragPointer()
 
-    DnD.reactive.dstPin = false
+    DnD.reactive.dstRank = E.TabRank.Regular
     DnD.reactive.dstParentId = D.NOID
 
     const panel = Sidebar.panelsById[Sidebar.activePanelId]
@@ -586,7 +589,7 @@ export function onDragEnter(e: DragEvent): void {
   }
 
   if (type === 'nav-item' && id) {
-    DnD.reactive.dstPin = false
+    DnD.reactive.dstRank = E.TabRank.Regular
     DnD.reactive.dstParentId = D.NOID
 
     // Open hidden panels bar
@@ -644,18 +647,22 @@ export function onDragEnter(e: DragEvent): void {
   }
 
   if (type === 'pinned-bar') {
-    const isPinnedTabsGlobal = Settings.state.pinnedTabsPosition !== 'panel'
-    DnD.reactive.dstPin = true
+    const rank = (e.target as HTMLElement).getAttribute('data-rank')
+    const isPinned = rank === 'pinned'
+    const isAnchored = rank === 'anchored'
+
+    DnD.reactive.dstRank = isPinned ? E.TabRank.Pinned : E.TabRank.Anchored
     DnD.reactive.dstPanelId = id ?? D.NOID
-    if (isPinnedTabsGlobal) {
+
+    if (isPinned) {
       const pinnedTabsLen = Tabs.pinned.length
       const lastPinnedTab = Tabs.list[pinnedTabsLen - 1]
       DnD.reactive.dstIndex = pinnedTabsLen
       DnD.reactive.dstPanelId = lastPinnedTab?.panelId ?? D.NOID
-    } else {
+    } else if (isAnchored) {
       const panel = Sidebar.panelsById[DnD.reactive.dstPanelId]
-      if (Utils.isTabsPanel(panel) && panel.pinnedTabs.length) {
-        const lastTab = panel.pinnedTabs[panel.pinnedTabs.length - 1]
+      if (Utils.isTabsPanel(panel) && panel.anchoredTabs.length) {
+        const lastTab = panel.anchoredTabs[panel.anchoredTabs.length - 1]
         if (lastTab) DnD.reactive.dstIndex = lastTab.index + 1
       }
     }
@@ -666,7 +673,7 @@ export function onDragEnter(e: DragEvent): void {
     const tab = Tabs.byId[id]
     if (!tab) return
     DnD.reactive.dstType = E.DropType.Tabs
-    DnD.reactive.dstPin = tab.pinned
+    DnD.reactive.dstRank = tab.rank
     if (tab.pinned) DnD.reactive.dstIndex = tab.index
     else DnD.reactive.dstPanelId = tab.panelId
 
@@ -688,7 +695,7 @@ export function onDragEnter(e: DragEvent): void {
     const panelId = dstPanel?.id
     DnD.reactive.dstType = E.DropType.Bookmarks
     DnD.reactive.dstPanelId = panelId ?? D.NOID
-    DnD.reactive.dstPin = false
+    DnD.reactive.dstRank = E.TabRank.Regular
   }
 }
 
@@ -1072,13 +1079,13 @@ export async function onDrop(e: DragEvent): Promise<void> {
         srcIncognito = firstTab.incognito
         srcIndex = firstTab.index
         srcPanelId = D.NOID
-        srcPin = firstTab.pinned
+        srcRank = firstTab.rank
         srcType = E.DragType.Tabs
         items = result.matchedNativeTabs.map(tab => {
           return {
             id: tab.id,
             container: tab.cookieStoreId,
-            pinned: tab.pinned,
+            rank: tab.rank,
             title: tab.title,
             url: tab.url,
           }
@@ -1110,7 +1117,7 @@ export async function onDrop(e: DragEvent): Promise<void> {
   const dst = getDstInfo()
 
   if (Sidebar.reactive.hiddenPanelsPopup) Sidebar.closeHiddenPanelsPopup()
-  if ((toTabs && !DnD.reactive.dstPin) || toBookmarks) {
+  if ((toTabs && DnD.reactive.dstRank === E.TabRank.Regular) || toBookmarks) {
     if (toTabs && Sidebar.subPanelActive && Sidebar.subPanels.bookmarks) {
       dstT = E.DropType.BookmarksPanel
       toTabs = false

@@ -273,8 +273,7 @@ async function onMouseUp(e: MouseEvent): Promise<void> {
       if (Utils.isTabsPanel(actPanel) && !newTabNeededInActPanel) {
         const actTab = Tabs.byId[Tabs.activeId]
         if (actTab) {
-          const inPanel = Settings.state.pinnedTabsPosition === 'panel'
-          newTabNeededInActPanel = actTab.panelId !== actPanel.id || (actTab.pinned && !inPanel)
+          newTabNeededInActPanel = actTab.panelId !== actPanel.id || actTab.pinned
         }
       }
 

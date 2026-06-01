@@ -2,6 +2,7 @@
 .Tab(
   :id="'tab' + tab.id"
   :data-pin="!!iconOnly"
+  :data-anchored="!!iconOnlyAnchored"
   :data-active="tab.reactive.active"
   :data-loading="tab.reactive.status === TabStatus.Loading"
   :data-pending="tab.reactive.status === TabStatus.Pending"
@@ -80,7 +81,7 @@
 <script lang="ts" setup>
 import { computed, ref, onMounted } from 'vue'
 import type { DragInfo, DragItem, Tab } from 'src/types'
-import { TabStatus, DragType, DropType, MenuType } from 'src/enums'
+import { TabStatus, DragType, DropType, MenuType, TabRank } from 'src/enums'
 import * as Settings from 'src/services/settings'
 import * as Windows from 'src/services/windows.fg'
 import * as Selection from 'src/services/selection.fg'
@@ -102,6 +103,7 @@ const iconOnly =
   (!Settings.state.pinnedTabsList ||
     Settings.state.pinnedTabsPosition === 'left' ||
     Settings.state.pinnedTabsPosition === 'right')
+const iconOnlyAnchored = tab.rank === TabRank.Anchored && !Settings.state.anchoredTabsList
 
 const titleEl = ref<HTMLElement | null>(null)
 const favImgEl = ref<HTMLImageElement | null>(null)
@@ -390,8 +392,8 @@ function longClickFeedback(e: MouseEvent) {
   else if (action === 'mute') Tabs.remuteTabs([tab.id])
   else if (action === 'clear_cookies') Tabs.clearTabsCookies([tab.id])
   else if (action === 'new_after') Tabs.createTabAfter(tab.id)
-  else if (action === 'new_child' && !tab.pinned) Tabs.createChildTab(tab.id)
-  else if (action === 'edit_title' && !tab.pinned) Tabs.editTabTitle([tab.id])
+  else if (action === 'new_child' && !tab.rank) Tabs.createChildTab(tab.id)
+  else if (action === 'edit_title' && !tab.rank) Tabs.editTabTitle([tab.id])
   else noop = true
 
   if (!noop) Tabs.triggerFlashAnimation(tab)
@@ -506,7 +508,7 @@ function onDoubleClick(): void {
   else if (dc === 'clear_cookies') Tabs.clearTabsCookies([tab.id])
   else if (dc === 'exp' && tab.isParent) Tabs.toggleBranch(tab.id)
   else if (dc === 'new_after') Tabs.createTabAfter(tab.id)
-  else if (dc === 'new_child' && !tab.pinned) Tabs.createChildTab(tab.id)
+  else if (dc === 'new_child' && !tab.rank) Tabs.createChildTab(tab.id)
   else if (dc === 'close') {
     if (shouldBeConvertedToGroup()) convertToGroup()
     else Tabs.removeTabs([tab.id])
@@ -536,12 +538,11 @@ function onDragStart(e: DragEvent): void {
   // Check what to drag
   const toDrag = [tab.id]
   const dragItems: DragItem[] = []
-  const pinned = tab.pinned
   const uriList = []
   const links = []
   const urlTitleList = []
   for (const tab of Tabs.list) {
-    const inBranch = Settings.state.tabsTree && !pinned && toDrag.includes(tab.parentId)
+    const inBranch = Settings.state.tabsTree && !tab.rank && toDrag.includes(tab.parentId)
     if (inBranch || Selection.includes(tab.id)) {
       uriList.push(tab.url)
       links.push(`<a href="${tab.url}>${tab.title}</a>`)
@@ -567,7 +568,7 @@ function onDragStart(e: DragEvent): void {
     windowId: Windows.id,
     incognito: Windows.incognito,
     panelId: tab.panelId,
-    pinnedTabs: pinned,
+    tabsRank: tab.rank,
     x: e.clientX,
     y: e.clientY,
   }
@@ -674,7 +675,7 @@ function discardOrCloseTabs(selectedTabs: ID[]): void {
  * Select this tab
  */
 function select(): void {
-  if (!tab.pinned && tab.isParent && tab.folded && !Search.active) {
+  if (!tab.rank && tab.isParent && tab.folded && !Search.active) {
     Selection.selectTabsBranch(tab)
   } else {
     Selection.selectTab(tab.id)

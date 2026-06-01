@@ -337,7 +337,7 @@ export const SETTINGS_OPTIONS = {
   historyMidClickAction: ['open_in_new', 'forget_visit'],
   tabRmBtn: ['always', 'hover', 'none'],
   activateAfterClosing: ['prev_act', 'next', 'prev', 'none'],
-  tabsUpdateMark: ['all', 'pin', 'norm', 'none'],
+  tabsUpdateMark: ['all', 'pin', 'anchor', 'norm', 'none'],
   pinnedTabsPosition: ['top', 'left', 'right'],
   tabsTreeLimit: [1, 2, 3, 4, 5, 'none'],
   previewTabsMode: ['i', 'p'],

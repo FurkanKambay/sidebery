@@ -246,7 +246,7 @@ function onCmd(name: string): void {
     if (!isNaN(index)) onKeySwitchToTab(index)
   } else if (name.startsWith('switch_to_unpinned_tab_')) {
     const index = parseInt(name.slice(-1))
-    if (!isNaN(index)) onKeySwitchToTab(index, { unpinned: true })
+    if (!isNaN(index)) onKeySwitchToTab(index, { regular: true })
   } else if (name === 'switch_to_next_tab') {
     const globaly = Settings.state.scrollThroughTabs === 'global'
     const globPin = Settings.state.scrollThroughTabsGlobPinIsolate ? false : undefined
@@ -261,6 +261,7 @@ function onCmd(name: string): void {
     onKeyScrollToTopBottom(1)
   } else if (name === 'duplicate_tabs') onKeyDuplicateTabs(false)
   else if (name === 'pin_tabs') onKeyPinTabs()
+  else if (name === 'anchor_tabs') onKeyAnchorTabs()
   else if (name === 'hide_act_panel') onKeyHidePanel()
   else if (name === 'group_tabs') onKeyGroupTabs(false)
   else if (name === 'group_tabs_act') onKeyGroupTabs(true)
@@ -390,7 +391,7 @@ function onKeyScrollToTopBottom(dir: 1 | -1) {
 
 interface SwitchToTab {
   visible?: boolean
-  unpinned?: boolean
+  regular?: boolean
 }
 
 function onKeySwitchToTab(targetIndex?: number, conf?: SwitchToTab): void {
@@ -402,8 +403,8 @@ function onKeySwitchToTab(targetIndex?: number, conf?: SwitchToTab): void {
   else normTabs = actPanel.tabs
 
   let tabsList
-  if (conf?.unpinned) tabsList = [...normTabs]
-  else tabsList = [...actPanel.pinnedTabs, ...normTabs]
+  if (conf?.regular) tabsList = [...normTabs]
+  else tabsList = [...actPanel.anchoredTabs, ...normTabs]
   if (!tabsList.length) return
 
   let targetTab
@@ -429,7 +430,7 @@ function onKeyMoveTabsToPanel(targetIndex: number): void {
   const probeTab = Tabs.byId[targetTabIds[0]]
   if (probeTab && probeTab.panelId !== panel.id) {
     const items = Tabs.getTabsInfo(targetTabIds)
-    const src = { windowId: Windows.id, panelId: probeTab.panelId, pinned: probeTab.pinned }
+    const src = { windowId: Windows.id, panelId: probeTab.panelId, rank: probeTab.rank }
     Tabs.move(items, src, { panelId: panel.id, index: panel.nextTabIndex })
   }
 }
@@ -526,8 +527,7 @@ function onKeyActivate(): void {
         if (Utils.isTabsPanel(actPanel) && !newTabNeededInActPanel) {
           const actTab = Tabs.byId[Tabs.activeId]
           if (actTab) {
-            const inPanel = Settings.state.pinnedTabsPosition === 'panel'
-            newTabNeededInActPanel = actTab.panelId !== actPanel.id || (actTab.pinned && !inPanel)
+            newTabNeededInActPanel = actTab.panelId !== actPanel.id || actTab.pinned
           }
         }
 
@@ -577,7 +577,7 @@ function onKeyNewTabAfter(): void {
 
   const conf: browser.tabs.CreateProperties = {
     index,
-    pinned: activeTab.pinned,
+    pinned: activeTab.rank === E.TabRank.Pinned,
     cookieStoreId: activeTab.cookieStoreId,
     windowId: Windows.id,
   }
@@ -617,12 +617,7 @@ function onKeySelect(dir: number): void {
   }
 
   if (Utils.isTabsPanel(activePanel)) {
-    let tabs
-    if (Settings.state.pinnedTabsPosition === 'panel') {
-      tabs = [...activePanel.pinnedTabs, ...activePanel.tabs]
-    } else {
-      tabs = [...Tabs.pinned, ...activePanel.tabs]
-    }
+    let tabs = [...Tabs.pinned, ...activePanel.anchoredTabs, ...activePanel.tabs]
     if (!tabs.length) return
 
     const selIsSet = Selection.isSet()
@@ -630,10 +625,7 @@ function onKeySelect(dir: number): void {
 
     if (Settings.state.selectActiveTabFirst && !selIsSet) {
       target = Tabs.byId[Tabs.activeId]
-      const wrongPanel =
-        target &&
-        (!target.pinned || Settings.state.pinnedTabsPosition === 'panel') &&
-        target.panelId !== activePanel.id
+      const wrongPanel = target && !target.pinned && target.panelId !== activePanel.id
 
       if (!target || wrongPanel) {
         target = dir > 0 ? tabs[0] : tabs.findLast(t => !t.invisible)
@@ -732,8 +724,9 @@ function onKeySelectExpand(dir: number): void {
     // Use pinned tabs as targets if there are pinned tabs selected or
     // if there is no selection and active tab is pinned
     if (selPinned || (selPinned === undefined && actTab?.pinned)) {
-      if (Settings.state.pinnedTabsPosition === 'panel') targets = activePanel.pinnedTabs
-      else targets = Tabs.pinned
+      // if (Settings.state.pinnedTabsPosition === 'panel') targets = activePanel.pinnedTabs
+      // else targets = Tabs.pinned
+      targets = Tabs.pinned
     }
   }
 
@@ -846,7 +839,7 @@ function onKeySelectAll(): void {
     ) {
       selectAllBookmarks(Sidebar.subPanels.bookmarks)
     } else {
-      const ids = [...activePanel.reactive.pinnedTabIds, ...activePanel.tabs.map(t => t.id)]
+      const ids = [...activePanel.reactive.anchoredTabIds, ...activePanel.tabs.map(t => t.id)]
       Selection.selectTabs(ids)
     }
   } else if (Utils.isBookmarksPanel(activePanel)) {
@@ -882,7 +875,7 @@ function onKeyMenu(): void {
 
   const activeTab = Tabs.byId[Tabs.activeId]
   const actPanelIsTabs = Utils.isTabsPanel(activePanel)
-  const pinnedGlobally = activeTab?.pinned && Settings.state.pinnedTabsPosition !== 'panel'
+  const pinnedGlobally = activeTab?.pinned
   if (!Selection.isSet() && activeTab) {
     const panelIsOk = actPanelIsTabs && activeTab.panelId === activePanel.id
     if (pinnedGlobally || panelIsOk) Selection.selectTab(Tabs.activeId)
@@ -1163,7 +1156,7 @@ function onKeyMoveTabsToAct(): void {
 
   Selection.resetSelection()
 
-  const src = { panelId, pinned: false, windowId: Windows.id }
+  const src = { panelId, rank: E.TabRank.Regular, windowId: Windows.id }
   Tabs.move(items, src, { index: activeTab.index + 1, parentId: activeTab.id, panelId })
 }
 
@@ -1177,14 +1170,14 @@ async function onKeyMoveTabs(dir: 1 | -1) {
 
   const toMove: T.Tab[] = []
   const toMoveById: Record<ID, T.Tab> = {}
-  let tabsPinned: boolean | undefined
+  let tabsRank: E.TabRank | undefined
   for (const id of preSelected) {
     const tab = Tabs.byId[id]
     if (!tab) continue
 
-    // Ignore mixed pinned/unpinned tabs
-    if (tabsPinned === undefined) tabsPinned = tab.pinned
-    else if (tabsPinned !== tab.pinned) return
+    // Ignore mixed-ranked tabs
+    if (tabsRank === undefined) tabsRank = tab.rank
+    else if (tabsRank !== tab.rank) return
 
     toMove.push(tab)
     toMoveById[tab.id] = tab
@@ -1220,38 +1213,62 @@ async function onKeyMoveTabs(dir: 1 | -1) {
   if (!edgeTab) return
 
   let panel = Sidebar.panelsById[edgeTab.panelId]
-  let unpin = false
   let pin = false
+  let anchor = false
+  let normalize = false
   if (!Utils.isTabsPanel(panel)) return
-  if (dir < 0 && edgeTab.pinned && edgeTab.index === panel.startTabIndex) return
-  if (dir < 0 && !edgeTab.pinned && edgeTab.index === panel.startTabIndex) pin = true
-  if (dir > 0 && edgeTab.pinned) {
-    let list: T.Tab[] | undefined
-    if (Settings.state.pinnedTabsPosition === 'panel') list = panel.pinnedTabs
-    else list = Tabs.pinned
-    if (!list?.length) return
-    if (edgeTab.id === list[list.length - 1]?.id) unpin = true
+
+  const isTopPanelTab = edgeTab.index === panel.startTabIndex
+  const regularTabStartIndex = panel.startTabIndex + (panel.anchoredTabs.length || 0) // this is also +1 than it should be? ---------------
+  const isFirstNormalTab = edgeTab.index === regularTabStartIndex
+
+  ///////////////////////
+  //zzz - +1 more
+  ////////////////////////
+  const edgeTabIndex = edgeTab.index
+  const panelStartIndex = panel.startTabIndex // this is +1 than it should be?? -------------------------------
+  const anchoredTabLen = panel.anchoredTabs.length
+  // console.log({ edgeTabIndex, panelStartIndex, normalTabStartIndex, anchoredTabLen })
+  // console.log({ dir, normalTabStartIndex, isTopUnpinnedTab, isFirstNormalTab })
+
+  if (dir < 0 && edgeTab.rank === E.TabRank.Pinned && isTopPanelTab) return
+  if (dir < 0 && edgeTab.rank === E.TabRank.Anchored && isTopPanelTab) pin = true
+  else if (dir < 0 && edgeTab.rank === E.TabRank.Regular && isFirstNormalTab) anchor = true
+
+  if (dir > 0 && edgeTab.rank === E.TabRank.Pinned) {
+    let pinnedList = Tabs.pinned
+    if (!pinnedList.length) return
+    if (edgeTab.id === pinnedList[pinnedList.length - 1]?.id) anchor = true
+  } else if (dir > 0 && edgeTab.rank === E.TabRank.Anchored) {
+    const lastAnchoredIndex = panel.startTabIndex + panel.anchoredTabs.length
+    if (edgeTab.index === lastAnchoredIndex) normalize = true
   }
+  // TODO FURKAN implement 'unanchor', 'anchor'
 
   let rootParentId = NOID
   let targetIndex
-  if (firstTab.pinned) {
-    let list: T.Tab[] | undefined
-    if (Settings.state.pinnedTabsPosition === 'panel') list = panel.pinnedTabs
-    else list = Tabs.pinned
 
+  // let msg = ''
+  // if (pin) msg += 'pin'
+  // if (anchor) msg += 'anchor'
+  // if (normalize) msg += 'normalize'
+  // if (msg) console.log(msg)
+
+  if (firstTab.rank !== E.TabRank.Regular) {
+    let list = Tabs.pinned
     const index = list.findLastIndex(t => t.id === edgeTab.id)
     if (index === -1) return
 
-    if (unpin) {
-      // Find target panel for unpinned global tab
-      if (Settings.state.pinnedTabsPosition !== 'panel') {
-        const actPanel = Sidebar.panelsById[Sidebar.activePanelId]
-        if (Utils.isTabsPanel(actPanel)) panel = actPanel
-        else panel = (Sidebar.panels.find(Utils.isTabsPanel) as T.TabsPanel | undefined) ?? panel
-      }
+    if (anchor) {
+      // Pinned -> Anchored -- Normal
+      // Find target panel for regular tab
+      const actPanel = Sidebar.panelsById[Sidebar.activePanelId]
+      if (Utils.isTabsPanel(actPanel)) panel = actPanel
+      else panel = (Sidebar.panels.find(Utils.isTabsPanel) as T.TabsPanel | undefined) ?? panel
 
       targetIndex = panel.startTabIndex
+
+      // console.log('Pinned -> Anchored -- Normal', { panel, targetIndex })
     } else if (dir < 0) {
       const prevTab = list.findLast(t => t.index < edgeTab.index)
       if (!prevTab) return
@@ -1263,14 +1280,23 @@ async function onKeyMoveTabs(dir: 1 | -1) {
     }
   } else {
     if (pin) {
-      let lastPinned: T.Tab | undefined
-      if (Settings.state.pinnedTabsPosition === 'panel') {
-        lastPinned = panel.pinnedTabs[panel.pinnedTabs.length - 1]
-      } else {
-        lastPinned = Tabs.pinned[Tabs.pinned.length - 1]
-      }
+      let lastPinned = Tabs.pinned[Tabs.pinned.length - 1]
+
       if (lastPinned) targetIndex = lastPinned.index + 1
       else targetIndex = 0
+
+      console.log('Pinned <- Anchored -- normal', { panel, targetIndex })
+    } else if (anchor) {
+      // Pinned -- Anchored <- Normal
+      if (!panel.anchoredTabs.length) targetIndex = panel.startTabIndex
+      else targetIndex = regularTabStartIndex
+
+      console.log('Pinned -- Anchored <- Normal', { panel, targetIndex })
+      //
+    } else if (normalize) {
+      // Pinned -- Anchored -> Normal
+      // targetIndex = startNormalTabIndex
+      console.log('Pinned -- Anchored -> Normal', { panel, targetIndex })
     } else if (dir < 0) {
       const prevTab = panel.tabs.findLast(t => t.index < firstTab.index && !t.invisible)
       if (!prevTab) return
@@ -1331,15 +1357,19 @@ async function onKeyMoveTabs(dir: 1 | -1) {
     }
   }
 
+  // console.log({ panelStartIndex, normalTabStartIndex, targetIndex })
+
   // Move tabs
   // ---
   tabsMoving = true
 
   const dst: T.DstPlaceInfo = { index: targetIndex, parentId: rootParentId, panelId: panel.id }
+  if (pin) dst.rank = E.TabRank.Pinned
+  else if (anchor) dst.rank = E.TabRank.Anchored
+  else if (normalize) dst.rank = E.TabRank.Regular
+  else dst.rank = edgeTab.rank
 
-  if (pin) dst.pinned = true
-  else if (unpin) dst.pinned = false
-  else dst.pinned = edgeTab.pinned
+  console.log(dst.rank, dst)
 
   await Tabs.move(toMove, {}, dst).catch(err => {
     Logs.err('KB.onKeyMoveTabs: Cannot move tabs', err)
@@ -1420,7 +1450,7 @@ function onKeyUnloadAllTabsInPanel() {
   if (!Utils.isTabsPanel(panel)) return
 
   const tabIds: ID[] = []
-  panel.pinnedTabs.forEach(t => tabIds.push(t.id))
+  panel.anchoredTabs.forEach(t => tabIds.push(t.id))
   panel.tabs.forEach(t => tabIds.push(t.id))
 
   if (tabIds.length) Tabs.discardTabs(tabIds)
@@ -1437,7 +1467,7 @@ function onKeyUnloadOtherTabsInPanel() {
   if (!Utils.isTabsPanel(panelOfFirstTab)) return
 
   const tabIds: ID[] = []
-  panelOfFirstTab.pinnedTabs.forEach(t => !ids.includes(t.id) && tabIds.push(t.id))
+  panelOfFirstTab.anchoredTabs.forEach(t => !ids.includes(t.id) && tabIds.push(t.id))
   panelOfFirstTab.tabs.forEach(t => !ids.includes(t.id) && tabIds.push(t.id))
 
   if (tabIds.length) Tabs.discardTabs(tabIds)
@@ -1472,7 +1502,7 @@ async function onKeyUnloadAllTabsInInactPanels() {
     if (!Utils.isTabsPanel(panel)) continue
     if (panel.id === actPanelId) continue
 
-    panel.pinnedTabs.forEach(t => tabIds.push(t.id))
+    panel.anchoredTabs.forEach(t => tabIds.push(t.id))
     panel.tabs.forEach(t => tabIds.push(t.id))
   }
 
@@ -1528,6 +1558,17 @@ function onKeyPinTabs() {
 
   if (firstTab.pinned) Tabs.unpinTabs(ids)
   else Tabs.pinTabs(ids)
+}
+
+function onKeyAnchorTabs() {
+  const ids = Selection.isTabs() ? Selection.ids() : [Tabs.activeId]
+  if (!ids.length) return
+
+  const firstTab = Tabs.byId[ids[0]]
+  if (!firstTab) return
+
+  if (firstTab.rank === E.TabRank.Anchored) Tabs.unanchorTabs(ids)
+  else Tabs.anchorTabs(ids)
 }
 
 function onKeyHidePanel() {

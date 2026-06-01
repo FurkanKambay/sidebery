@@ -46,7 +46,7 @@ export interface SnapTab {
   title: string
   panelId: ID
   lvl?: number
-  pinned?: boolean
+  rank?: E.TabRank
   folded?: boolean
   containerId?: string
   customTitle?: string

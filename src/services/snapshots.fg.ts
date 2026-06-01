@@ -12,6 +12,7 @@ import * as Windows from 'src/services/windows.fg'
 import * as Containers from 'src/services/containers.fg'
 
 import { getNormalizedSnapshot, GLOB_PINNED_ID } from 'src/services/snapshots'
+import { TabRank } from 'src/enums'
 export * from 'src/services/snapshots'
 
 export interface SnapshotsState {
@@ -111,14 +112,14 @@ export function parseSnapshot(
 
         const container = tab.containerId ? snapshot.containers[tab.containerId] : undefined
 
-        if (tab.pinned && tab.panelId === D.NOID) tab.panelId = GLOB_PINNED_ID
+        if (tab.rank === TabRank.Pinned && tab.panelId === D.NOID) tab.panelId = GLOB_PINNED_ID
 
         let panelState = panelsById[tab.panelId]
         if (!panelState) {
           let panelConfig = snapshot.sidebar.panels[tab.panelId]
           if (!panelConfig) {
             panelConfig = Utils.cloneObject(D.TABS_PANEL_CONFIG)
-            if (tab.pinned && tab.panelId === GLOB_PINNED_ID) {
+            if (tab.rank === TabRank.Pinned && tab.panelId === GLOB_PINNED_ID) {
               panelConfig.id = GLOB_PINNED_ID
               panelConfig.name = translate('snapshot.global_pin_title')
               panelConfig.iconSVG = 'icon_pin'

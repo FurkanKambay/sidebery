@@ -21,6 +21,7 @@ export let activateAfterClosingPrevAct = false
 
 export let tabsUpdateMarkAll = false
 export let tabsUpdateMarkPin = false
+export let tabsUpdateMarkAnchor = false
 export let tabsUpdateMarkNorm = false
 export let tabsUpdateMarkNone = false
 
@@ -93,6 +94,7 @@ export function updPrecalcSettings() {
 
   tabsUpdateMarkAll = state.tabsUpdateMark === 'all'
   tabsUpdateMarkPin = state.tabsUpdateMark === 'pin'
+  tabsUpdateMarkAnchor = state.tabsUpdateMark === 'anchor'
   tabsUpdateMarkNorm = state.tabsUpdateMark === 'norm'
   tabsUpdateMarkNone = state.tabsUpdateMark === 'none'
 }

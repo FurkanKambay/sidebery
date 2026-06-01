@@ -7,7 +7,8 @@
   :data-invisible="tab.invisible"
   :data-sel="tab.sel"
   :data-lvl="tab.lvl"
-  :data-pinned="tab.pinned"
+  :data-pinned="tab.rank === TabRank.Pinned"
+  :data-anchored="tab.rank === TabRank.Anchored"
   :data-color="tab.containerColor"
   :data-shift-sel="viewerState.mouseUpShiftTabId === tab.id"
   @click.stop.prevent=""
@@ -28,7 +29,7 @@
       v-if="tab.domain && Favicons.reactive.byDomains[tab.domain]"
       :src="Favicons.reactive.byDomains[tab.domain]")
     svg(v-else): use(:href="tab.iconSVG")
-    svg.pin(v-if="tab.pinned"): use(href="#icon_pin")
+    svg.pin(v-if="tab.rank === TabRank.Pinned"): use(href="#icon_pin")
   .title-url
     .title {{tab.customTitle ?? tab.title}}
     a.url(
@@ -45,6 +46,7 @@
 import type { ItemInfo, SnapPanelState, SnapshotState, SnapTabState } from 'src/types'
 import type { SnapshotsViewerState } from './snapshots.vue'
 import { CONTAINER_ID, NOID, RGB_COLORS } from 'src/defaults'
+import { TabRank } from 'src/enums.ts'
 import * as Snapshots from 'src/services/snapshots.fg'
 import * as Favicons from 'src/services/favicons.fg'
 import * as Utils from 'src/utils'

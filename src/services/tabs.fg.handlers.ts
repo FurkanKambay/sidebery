@@ -1,5 +1,5 @@
 import { NativeTab, Tab, TabsPanel, RemovedTabInfo, TabSessionData } from 'src/types'
-import { LoadSrc, TabStatus } from 'src/enums'
+import { LoadSrc, TabRank, TabStatus } from 'src/enums'
 import * as D from 'src/defaults'
 import * as Utils from 'src/utils'
 import * as Logs from 'src/services/logs'
@@ -271,7 +271,12 @@ async function onTabCreated(nativeTab: NativeTab, attached?: boolean) {
   }
 
   // Check if opener tab is pinned
-  if (Settings.state.pinnedAutoGroup && initialOpener?.pinned && Settings.state.tabsTree) {
+  if (
+    initialOpener &&
+    Settings.state.tabsTree &&
+    ((Settings.state.pinnedAutoGroup && initialOpener.rank === TabRank.Pinned) ||
+      (Settings.state.anchoredAutoGroup && initialOpener.rank === TabRank.Anchored))
+  ) {
     autoGroupTab = Tabs.findGroupTabBoundToPinnedTab(initialOpener)
     if (autoGroupTab) {
       tab.openerTabId = autoGroupTab.id
@@ -896,8 +901,9 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo, nativeTab: Nat
       !tab.discarded && // Tab is loaded
       // Check settings
       (Settings.tabsUpdateMarkAll ||
-        (Settings.tabsUpdateMarkPin && tab.pinned) ||
-        (Settings.tabsUpdateMarkNorm && !tab.pinned)) &&
+        (Settings.tabsUpdateMarkPin && tab.rank === TabRank.Pinned) ||
+        (Settings.tabsUpdateMarkAnchor && tab.rank === TabRank.Anchored) ||
+        (Settings.tabsUpdateMarkNorm && tab.rank === TabRank.Regular)) &&
       // Tab is inactive for more than 5s
       Date.now() - nativeTab.lastAccessed > 5000 &&
       // Current url is the same as previous
@@ -913,7 +919,7 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo, nativeTab: Nat
         tab.reactive.updated = true
         if (
           Utils.isTabsPanel(panel) &&
-          (!nativeTab.pinned || Settings.state.pinnedTabsPosition === 'panel') &&
+          !nativeTab.pinned &&
           panel.updatedTabs &&
           !panel.updatedTabs.includes(tabId)
         ) {
@@ -960,15 +966,14 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo, nativeTab: Nat
 
   // Handle unpinned tab
   if (unpinned) {
+    console.log('FURKAN handle unpin', { beforeRank: tab.rank, tab })
     Tabs.cacheTabsData(640)
+    Tabs.setRank(tab, TabRank.Regular)
+    console.log('FURKAN handle unpin', { afterRank: tab.rank, tab })
 
     let panel
-    if (Settings.state.pinnedTabsPosition === 'panel') {
-      panel = Sidebar.panelsById[tab.panelId]
-    } else {
-      panel = Sidebar.panelsById[Sidebar.activePanelId]
-      if (!Utils.isTabsPanel(panel)) panel = Sidebar.panelsById[Sidebar.prevTabsPanelId]
-    }
+    panel = Sidebar.panelsById[Sidebar.activePanelId]
+    if (!Utils.isTabsPanel(panel)) panel = Sidebar.panelsById[Sidebar.prevTabsPanelId]
     if (!Utils.isTabsPanel(panel)) panel = Sidebar.panels.find(Utils.isTabsPanel)
 
     if (Utils.isTabsPanel(panel)) {
@@ -1009,7 +1014,10 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo, nativeTab: Nat
 
   // Handle pinned tab
   if (pinned) {
+    console.log('FURKAN handle pin', { beforeRank: tab.rank, tab })
     Tabs.cacheTabsData(640)
+    Tabs.setRank(tab, TabRank.Pinned)
+    console.log('FURKAN handle pin', { afterRank: tab.rank, tab })
 
     const prevPanelId = tab.prevPanelId
     const panelId = tab.panelId
@@ -1090,7 +1098,7 @@ function updTabReactiveProps(change: browser.tabs.ChangeInfo, tab: Tab) {
     Tabs.renderFavicon(tab)
   }
   if (change.mutedInfo?.muted !== undefined) tab.reactive.mediaMuted = change.mutedInfo.muted
-  if (change.pinned !== undefined) tab.reactive.pinned = change.pinned
+  if (change.pinned !== undefined) tab.reactive.rank = change.pinned ? TabRank.Pinned : TabRank.Regular
   if (change.status !== undefined) tab.reactive.status = Tabs.getStatus(tab)
   if (change.title !== undefined) Tabs.renderTitle(tab)
   if (change.url !== undefined) tab.reactive.url = change.url
@@ -1379,7 +1387,7 @@ function onTabRemoved(tabId: ID, info: browser.tabs.RemoveInfo, detached?: boole
       Settings.state.hideEmptyPanels &&
       !panel.tabs.length &&
       Tabs.activeId !== tabId && // <- b/c panel will be switched in onTabActivated
-      !panel.pinnedTabs.length &&
+      !panel.anchoredTabs.length &&
       Sidebar.activePanelId === panel.id &&
       !Sidebar.switchingLock
     ) {
@@ -1717,12 +1725,7 @@ function onTabActivated(info: browser.tabs.ActiveInfo): void {
   // Switch to activated tab's panel
   const activePanel = Sidebar.panelsById[Sidebar.activePanelId]
   const switchPanel = Settings.state.switchPanelAfterSwitchingTab !== 'no'
-  if (
-    switchPanel &&
-    (!tab.pinned || Settings.state.pinnedTabsPosition === 'panel') &&
-    !activePanel?.lockedPanel &&
-    !Sidebar.switchingLock
-  ) {
+  if (switchPanel && !tab.pinned && !activePanel?.lockedPanel && !Sidebar.switchingLock) {
     if (Settings.state.switchPanelAfterSwitchingTab === 'mouseleave' && Mouse.mouseIn) {
       if (activePanel.id !== tab.panelId) Sidebar.setSwitchOnMouseLeaveState(true)
     } else if (!Sidebar.subPanelActive) {
