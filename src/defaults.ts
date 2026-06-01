@@ -169,6 +169,7 @@ export const BKM_MOBILE_ID = 'mobile______'
 export const BKM_TLBR_ID = 'toolbar_____'
 
 export const PIN_MARK = '📌'
+export const ANCHOR_MARK = '📍'
 
 export const MIN_SEARCH_QUERY_LEN = 2
 

@@ -14,7 +14,7 @@
     display: none
 
 // Per-Panel
-#root[data-pinned-tabs-position="panel"] .PinnedTabsBar
+#root .PinnedTabsBar[data-rank="anchored"]
   width: 100%
   height: auto
   flex-wrap: wrap
@@ -22,7 +22,7 @@
   grid-gap: var(--tabs-margin)
   padding: 0 var(--tabs-margin) var(--tabs-margin)
 
-#root[data-pinned-tabs-position="panel"][data-pinned-tabs-list="true"] .PinnedTabsBar
+#root[data-anchored-tabs-list="true"] .PinnedTabsBar[data-rank="anchored"]
   padding: 0 0 calc(var(--tabs-margin) + 9px)
   grid-gap: 0
 
@@ -132,11 +132,17 @@
   display: block
   left: auto
   right: -2px
-#root[data-pinned-tabs-position="panel"][data-pinned-tabs-list="true"]
 #root[data-pinned-tabs-position="top"][data-pinned-tabs-list="true"]
 #root[data-pinned-tabs-position="left"]
 #root[data-pinned-tabs-position="right"]
-  .PinnedTabsBar[data-dnd-end="true"] .tab-wrapper:last-of-type:after
+  .PinnedTabsBar[data-rank="pinned"][data-dnd-end="true"] .tab-wrapper:last-of-type:after
+    display: block
+    left: auto
+    right: auto
+    top: auto
+    bottom: 0
+#root[data-anchored-tabs-list="true"]
+  .PinnedTabsBar[data-rank="anchored"][data-dnd-end="true"] .tab-wrapper:last-of-type:after
     display: block
     left: auto
     right: auto

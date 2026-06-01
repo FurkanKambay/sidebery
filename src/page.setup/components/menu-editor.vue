@@ -160,6 +160,7 @@ interface MenuEditorGroup {
 const TABS_MENU_OPTS: Record<string, string> = {
   undoRmTab: 'menu.tab.undo',
   pin: 'menu.tab.pin',
+  anchor: 'menu.tab.anchor',
   reload: 'menu.tab.reload',
   bookmark: 'menu.tab.bookmark',
   moveToNewWin: 'menu.tab.move_to_new_window',

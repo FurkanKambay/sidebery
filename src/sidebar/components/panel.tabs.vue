@@ -7,7 +7,7 @@
   @mouseleave="onMouseLeave"
   @dblclick="onDoubleClick"
   @drop="onDrop")
-  PinnedTabsBar(v-if="panel.reactive.pinnedTabIds.length" :panel="panel")
+  PinnedTabsBar(data-rank="anchored" v-if="panel.reactive.pinnedTabIds.length" :panel="panel")
   ScrollBox(ref="scrollBox" :preScroll="D.PRE_SCROLL")
     DragAndDropPointer(:panelId="panel.id" :subPanel="false")
     AnimatedTabList(:panel="panel")

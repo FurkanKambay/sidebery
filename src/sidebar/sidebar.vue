@@ -14,6 +14,7 @@
   :data-animations="animations"
   :data-pinned-tabs-position="Settings.state.pinnedTabsPosition"
   :data-pinned-tabs-list="Settings.state.pinnedTabsList"
+  :data-anchored-tabs-list="Settings.state.anchoredTabsList"
   :data-tabs-tree-lvl-marks="Settings.state.tabsLvlDots"
   :data-tabs-close-btn="Settings.state.tabRmBtn"
   :data-drag="DnD.reactive.isStarted"
@@ -69,11 +70,11 @@
 
   .main-box
     .left-vertical-box(v-if="pinnedTabsBarLeft || navBarLeft")
-      PinnedTabsBar(v-if="pinnedTabsBarLeft")
+      PinnedTabsBar(data-rank="pinned" v-if="pinnedTabsBarLeft")
       NavigationBar.-vert(v-if="navBarLeft")
 
     .central-box
-      PinnedTabsBar(v-if="pinnedTabsBarTop")
+      PinnedTabsBar(data-rank="pinned" v-if="pinnedTabsBarTop")
       SearchBar(v-if="!navBarHorizontal" v-show="Settings.state.searchBarMode !== 'none'")
       .panel-box(ref="panelBoxEl" @wheel.passive="onWheel")
         component.panel(
@@ -114,7 +115,7 @@
       SubPanel
 
     .right-vertical-box(v-if="pinnedTabsBarRight || navBarRight")
-      PinnedTabsBar(v-if="pinnedTabsBarRight")
+      PinnedTabsBar(data-rank="pinned" v-if="pinnedTabsBarRight")
       NavigationBar.-vert(v-if="navBarRight")
 
   teleport(

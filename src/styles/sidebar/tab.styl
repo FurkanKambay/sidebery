@@ -600,13 +600,13 @@
 
 .Tab[data-pin="true"] .ctx
   box-shadow: 0 0 1px 0 #00000032
-#root[data-pinned-tabs-position="panel"] .Tab[data-pin="true"] .ctx
+#root .Tab[data-anchored="true"] .ctx
 #root[data-pinned-tabs-position="top"] .Tab[data-pin="true"] .ctx
   bottom: 2px
   left: 6px
   width: calc(100% - 12px)
   height: 2px
-#root[data-pinned-tabs-position="panel"] .Tab[data-pin="true"][data-loading="true"] .ctx
+#root .Tab[data-anchored="true"][data-loading="true"] .ctx
 #root[data-pinned-tabs-position="top"] .Tab[data-pin="true"][data-loading="true"] .ctx
   width: calc(50% - 12px)
   transition: width var(--d-fast)

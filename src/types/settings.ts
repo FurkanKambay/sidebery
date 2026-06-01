@@ -131,6 +131,11 @@ export interface SettingsState {
   pinnedNoUnloadExplicit: boolean
   pinnedForcedDiscard: boolean
 
+  // Anchored tabs
+  anchoredTabsList: boolean
+  anchoredAutoGroup: boolean
+  anchoredNoUnload: boolean
+
   // Tabs tree
   tabsTree: boolean
   groupOnOpen?: boolean // DEPR

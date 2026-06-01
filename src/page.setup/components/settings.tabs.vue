@@ -290,7 +290,7 @@ section(ref="el")
       @update:value="Settings.saveDebounced(150)")
     ToggleField(
       label="settings.pinned_tabs_list"
-      :inactive="Settings.state.pinnedTabsPosition !== 'panel' && Settings.state.pinnedTabsPosition!== 'top'"
+      :inactive="Settings.state.pinnedTabsPosition !== 'top'"
       dbg="pinnedTabsList"
       v-model:value="Settings.state.pinnedTabsList"
       :default="DEFAULT_SETTINGS.pinnedTabsList"
@@ -309,6 +309,17 @@ section(ref="el")
         :inactive="!Settings.state.pinnedNoUnload"
         :default="DEFAULT_SETTINGS.pinnedNoUnloadExplicit"
         @update:value="Settings.saveDebounced(150)")
+
+  .wrapper(ref="anchoredTabsEl")
+    .sub-title: .text {{translate('settings.nav_settings_anchored_tabs')}}
+    ToggleField(
+      label="settings.anchored_tabs_list"
+      v-model:value="Settings.state.anchoredTabsList"
+      @update:value="Settings.saveDebounced(150)")
+    ToggleField(
+      label="settings.anchored.no_unload"
+      v-model:value="Settings.state.anchoredNoUnload"
+      @update:value="Settings.saveDebounced(150)")
 
   .wrapper(ref="tabsTreeEl")
     .sub-title: .text {{translate('settings.nav_settings_tabs_tree')}}
@@ -669,6 +680,7 @@ import NumField from '../../components/num-field.vue'
 const el = ref<HTMLElement | null>(null)
 const newTabPosEl = ref<HTMLElement | null>(null)
 const pinTabsEl = ref<HTMLElement | null>(null)
+const anchoredTabsEl = ref<HTMLElement | null>(null)
 const tabsTreeEl = ref<HTMLElement | null>(null)
 const tabsColorEl = ref<HTMLElement | null>(null)
 const tabsPreviewEl = ref<HTMLElement | null>(null)
@@ -793,6 +805,7 @@ onMounted(() => {
   SetupPage.registerEl('settings_tabs', el.value)
   SetupPage.registerEl('settings_new_tab_position', newTabPosEl.value)
   SetupPage.registerEl('settings_pinned_tabs', pinTabsEl.value)
+  SetupPage.registerEl('settings_anchored_tabs', anchoredTabsEl.value)
   SetupPage.registerEl('settings_tabs_tree', tabsTreeEl.value)
   SetupPage.registerEl('settings_tabs_colorization', tabsColorEl.value)
   SetupPage.registerEl('settings_tabs_preview', tabsPreviewEl.value)

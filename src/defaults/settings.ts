@@ -126,12 +126,17 @@ export const DEFAULT_SETTINGS: SettingsState = {
   autoScrollToNewTab: true,
 
   // Pinned tabs
-  pinnedTabsPosition: 'panel',
+  pinnedTabsPosition: 'top',
   pinnedTabsList: false,
   pinnedAutoGroup: false,
   pinnedNoUnload: false,
   pinnedNoUnloadExplicit: true,
   pinnedForcedDiscard: false,
+
+  // Anchored tabs
+  anchoredTabsList: true,
+  anchoredAutoGroup: false,
+  anchoredNoUnload: false,
 
   // Tabs tree
   tabsTree: true,
@@ -333,7 +338,7 @@ export const SETTINGS_OPTIONS = {
   tabRmBtn: ['always', 'hover', 'none'],
   activateAfterClosing: ['prev_act', 'next', 'prev', 'none'],
   tabsUpdateMark: ['all', 'pin', 'norm', 'none'],
-  pinnedTabsPosition: ['panel', 'top', 'left', 'right'],
+  pinnedTabsPosition: ['top', 'left', 'right'],
   tabsTreeLimit: [1, 2, 3, 4, 5, 'none'],
   previewTabsMode: ['i', 'p'],
   previewTabsPageModeFallback: ['i', 'n'],

@@ -707,6 +707,9 @@ Liste de “sous-chaines” ou “/RegExp/” avec une entrée par ligne:
     zh_TW: '已釘選分頁',
     ja: 'ピン留めされたタブ',
   },
+  'settings.nav_settings_anchored_tabs': {
+    en: 'Anchored tabs',
+  },
   'settings.nav_settings_tabs_tree': {
     en: 'Tabs tree',
     de: 'Tab-Baum',
@@ -2920,6 +2923,9 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     zh_TW: '僅釘選',
     ja: '固定のみ',
   },
+  'settings.tabs_update_mark_anchor': {
+    en: 'only for anchored',
+  },
   'settings.tabs_update_mark_norm': {
     en: 'only for not pinned',
     de: 'Nur für nicht angeheftete',
@@ -3403,19 +3409,8 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     zh_TW: '已釘選分頁位置',
     ja: '固定タブの位置',
   },
-  'settings.pinned_tabs_position_panel': {
-    en: 'in panel - top',
-    de: 'Im Panel - Oben',
-    fr: 'en haut du panneau',
-    hu: 'a panelon – fent',
-    pl: 'w panelu - góra',
-    ru: 'на панели - сверху',
-    zh_CN: '面板 - 顶部',
-    zh_TW: '面板 - 頂部',
-    ja: 'パネル - 上部',
-  },
   'settings.pinned_tabs_position_top': {
-    en: 'globally - top',
+    en: 'top',
     de: 'Global - Oben',
     fr: 'en haut de tous les panneaux',
     hu: 'globálisan – fent',
@@ -3426,7 +3421,7 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     ja: 'グローバル - 上部',
   },
   'settings.pinned_tabs_position_left': {
-    en: 'globally - left',
+    en: 'left',
     de: 'Global - Links',
     fr: 'à gauche de tous les panneaux',
     hu: 'globálisan – balra',
@@ -3437,7 +3432,7 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     ja: 'グローバル - 左部',
   },
   'settings.pinned_tabs_position_right': {
-    en: 'globally - right',
+    en: 'right',
     de: 'Global - Rechts',
     fr: 'à droite de tous les panneaux',
     hu: 'globálisan – jobbra',
@@ -3471,6 +3466,14 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
   },
   'settings.pinned.no_unload_explicit': {
     en: 'Including explicit unloading via context menu, mouse action or keybinding',
+  },
+
+  // - Anchored tabs
+  'settings.anchored_tabs_list': {
+    en: 'Show titles of anchored tabs',
+  },
+  'settings.anchored.no_unload': {
+    en: 'Prevent anchored tabs from unloading',
   },
 
   // - Tabs tree
@@ -5523,6 +5526,12 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     zh_CN: '取消固定',
     zh_TW: '取消釘選',
     ja: 'ピン留め解除',
+  },
+  'settings.tab_action_anchor': {
+    en: 'anchor',
+  },
+  'settings.tab_action_unanchor': {
+    en: 'unanchor',
   },
   'settings.tab_action_mute': {
     en: 'mute',

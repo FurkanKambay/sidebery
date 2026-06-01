@@ -157,6 +157,12 @@ export const enum MenuType {
 // ---
 // -- Tabs
 // -
+export const enum TabRank {
+  Regular = 0,
+  PanelSticky = 1,
+  GlobalPinned = 2,
+}
+
 export const enum TabStatus {
   Complete = 1,
   Loading = 2,
